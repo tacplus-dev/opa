@@ -10,6 +10,7 @@ import (
 	servicemanager "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm"
 	pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/services/uncleopa"
 	opaPb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/opa"
+	x509Pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/x509"
 )
 
 // Handler implements the service-manager Handler interface for uncleopa.
@@ -31,24 +32,28 @@ func (h *Handler) Init(sm *servicemanager.ServiceManager) error {
 	return nil
 }
 
+// UncleOpaConfig is called by the SM when config updates arrive from kernel.
+// OPA policy bundles are delivered via config (not state).
 func (h *Handler) UncleOpaConfig(cfg *pb.Config) error {
-	return nil
-}
-
-func (h *Handler) Shutdown(ctx context.Context) {}
-
-// OnStateUpdate is called by the SM when state changes arrive.
-// It reloads OPA policy evaluators from the updated policy bundles.
-func (h *Handler) OnStateUpdate(state *pb.UncleOpaState) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if policy := state.GetEntitlementsPolicy(); policy != nil {
+	if policy := cfg.GetEntitlementsPolicy(); policy != nil {
 		if err := h.loadPolicy(policy); err != nil {
 			return fmt.Errorf("entitlements policy: %w", err)
 		}
 	}
 
+	return nil
+}
+
+func (h *Handler) NewTlsCert(certChain *x509Pb.X509CertChain, privateKeyDER []byte) error {
+	return nil
+}
+
+func (h *Handler) Shutdown(ctx context.Context) {}
+
+func (h *Handler) OnStateUpdate(state *pb.UncleOpaState) error {
 	return nil
 }
 
