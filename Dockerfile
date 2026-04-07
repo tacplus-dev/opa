@@ -25,7 +25,7 @@ RUN case "${TARGETARCH}" in amd64) GRPCURL_ARCH=x86_64;; *) GRPCURL_ARCH=${TARGE
     && chmod +x /usr/local/bin/grpc_health_probe \
     && addgroup -S uncleopa && adduser -S uncleopa -G uncleopa
 
-COPY bin/uncleopa /usr/local/bin/uncleopa
+COPY bin/uncleopa-${TARGETARCH} /usr/local/bin/uncleopa
 RUN chmod +x /usr/local/bin/uncleopa
 
 USER uncleopa
