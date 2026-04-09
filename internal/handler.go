@@ -6,11 +6,15 @@ import (
 	"sync"
 
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
-	servicemanager "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm"
-	pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/services/uncleopa"
+	"gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/libs/servicemanager"
+	uncleopa_fe "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm/grpc/servers/opa/userentitlements"
 	opaPb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/opa"
 	x509Pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/x509"
+	userentitlements_pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/opa/userentitlements"
+	pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/services/uncleopa"
 )
 
 // Handler implements the service-manager Handler interface for uncleopa.
@@ -22,19 +26,20 @@ type Handler struct {
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(sm *servicemanager.ServiceManager) (*Handler, error) {
+func NewHandler() *Handler {
 	return &Handler{
 		evaluators: make(map[string]*PolicyEvaluator),
-	}, nil
+	}
 }
 
-func (h *Handler) Init(sm *servicemanager.ServiceManager) error {
-	return nil
+// OpaEvalGrpcImpl returns this handler as the OpaEval gRPC implementation.
+func (h *Handler) OpaEvalGrpcImpl() uncleopa_fe.OpaEvalHandler {
+	return h
 }
 
-// UncleOpaConfig is called by the SM when config updates arrive from kernel.
+// OpaEvalConfig is called by the SM with initial config and on every update.
 // OPA policy bundles are delivered via config (not state).
-func (h *Handler) UncleOpaConfig(cfg *pb.Config) error {
+func (h *Handler) OpaEvalConfig(cfg *pb.Config) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -53,8 +58,34 @@ func (h *Handler) NewTlsCert(certChain *x509Pb.X509CertChain, privateKeyDER []by
 
 func (h *Handler) Shutdown(ctx context.Context) {}
 
-func (h *Handler) OnStateUpdate(state *pb.UncleOpaState) error {
-	return nil
+// EvalEntitlement implements OpaEvalHandler — evaluates entitlement profiles
+// from IDP claims via the loaded OPA policy.
+func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Caller, req *userentitlements_pb.EntitlementEvalInput) (*userentitlements_pb.EntitlementEvalResult, error) {
+	eval, err := h.getEvaluator("data.entitlements.profiles")
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "no policy loaded: %v", err)
+	}
+
+	input := make(map[string]any)
+	for k, v := range req.GetClaims() {
+		input[k] = v
+	}
+
+	result, err := eval.Evaluate(input)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "OPA eval: %v", err)
+	}
+
+	var profiles []string
+	if list, ok := result.([]interface{}); ok {
+		for _, item := range list {
+			if s, ok := item.(string); ok {
+				profiles = append(profiles, s)
+			}
+		}
+	}
+
+	return &userentitlements_pb.EntitlementEvalResult{Profiles: profiles}, nil
 }
 
 // loadPolicy creates or replaces a PolicyEvaluator for the given policy.

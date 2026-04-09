@@ -13,10 +13,7 @@ func main() {
 		log.Fatalf("servicemanager: %v", err)
 	}
 
-	h, err := handler.NewHandler(sm)
-	if err != nil {
-		log.Fatalf("handler: %v", err)
-	}
+	h := handler.NewHandler()
 
 	if err := sm.Run(h); err != nil {
 		log.Fatalf("uncleopa: %v", err)
