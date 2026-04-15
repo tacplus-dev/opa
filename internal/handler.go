@@ -13,7 +13,7 @@ import (
 	uncleopa_fe "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm/grpc/servers/generated/opa_eval"
 	opaPb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/opa"
 	x509Pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/x509"
-	userentitlements_pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/opa/userentitlements"
+	userentitlements_pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/vservices/userentitlements"
 	pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/services/uncleopa"
 )
 
@@ -58,34 +58,87 @@ func (h *Handler) NewTlsCert(certChain *x509Pb.X509CertChain, privateKeyDER []by
 
 func (h *Handler) Shutdown(ctx context.Context) {}
 
-// EvalEntitlement implements OpaEvalHandler — evaluates entitlement profiles
+// EvalEntitlement implements OpaEvalHandler — evaluates entitlements
 // from IDP claims via the loaded OPA policy.
+//
+// The policy returns a structured EntitlementEvalResult with:
+//   - grant_all: bool (grant every RPC on every service)
+//   - grant_all_<service>: bool (grant every RPC on that service)
+//   - entitlements: object (explicit per-service RPC lists)
+//
+// Kernel expands grant_all flags and merges with explicit entitlements
+// before embedding in the token.
 func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Caller, req *userentitlements_pb.EntitlementEvalInput) (*userentitlements_pb.EntitlementEvalResult, error) {
-	eval, err := h.getEvaluator("data.entitlements.profiles")
+	eval, err := h.getEvaluator("data.entitlements.eval")
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "no policy loaded: %v", err)
 	}
 
-	input := make(map[string]any)
+	claims := make(map[string]any)
 	for k, v := range req.GetClaims() {
-		input[k] = v
+		claims[k] = v
 	}
+	input := map[string]any{"claims": claims}
+
+	zap.L().Info("EvalEntitlement input", zap.Any("input", input))
 
 	result, err := eval.Evaluate(input)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "OPA eval: %v", err)
 	}
 
-	var profiles []string
-	if list, ok := result.([]interface{}); ok {
-		for _, item := range list {
-			if s, ok := item.(string); ok {
-				profiles = append(profiles, s)
-			}
-		}
+	zap.L().Info("EvalEntitlement result", zap.Any("result", result), zap.String("type", fmt.Sprintf("%T", result)))
+
+	resp := &userentitlements_pb.EntitlementEvalResult{}
+
+	obj, ok := result.(map[string]interface{})
+	if !ok {
+		zap.L().Warn("EvalEntitlement: result is not an object, returning empty entitlements")
+		return resp, nil
 	}
 
-	return &userentitlements_pb.EntitlementEvalResult{Profiles: profiles}, nil
+	if v, ok := obj["grant_all"].(bool); ok {
+		resp.GrantAll = v
+	}
+	if v, ok := obj["grant_all_sentinel"].(bool); ok {
+		resp.GrantAllSentinel = v
+	}
+	if v, ok := obj["grant_all_gateway"].(bool); ok {
+		resp.GrantAllGateway = v
+	}
+	if v, ok := obj["grant_all_mcp"].(bool); ok {
+		resp.GrantAllMcp = v
+	}
+	if v, ok := obj["grant_all_eventbus"].(bool); ok {
+		resp.GrantAllEventbus = v
+	}
+	if v, ok := obj["grant_all_fleetwood"].(bool); ok {
+		resp.GrantAllFleetwood = v
+	}
+	if v, ok := obj["grant_all_anthropic"].(bool); ok {
+		resp.GrantAllAnthropic = v
+	}
+	if v, ok := obj["grant_all_github"].(bool); ok {
+		resp.GrantAllGithub = v
+	}
+	if v, ok := obj["grant_all_gitlab"].(bool); ok {
+		resp.GrantAllGitlab = v
+	}
+	if v, ok := obj["grant_all_openai"].(bool); ok {
+		resp.GrantAllOpenai = v
+	}
+
+	// Explicit entitlements are passed through as-is. Kernel handles
+	// the expansion and merge with grant_all flags.
+	// The OPA policy can return per-service RPC lists in the entitlements
+	// field if it needs fine-grained control beyond grant_all.
+
+	zap.L().Info("EvalEntitlement response",
+		zap.Bool("grant_all", resp.GrantAll),
+		zap.Bool("grant_all_sentinel", resp.GrantAllSentinel),
+		zap.Bool("grant_all_gateway", resp.GrantAllGateway))
+
+	return resp, nil
 }
 
 // loadPolicy creates or replaces a PolicyEvaluator for the given policy.
