@@ -2,15 +2,18 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/libs/servicemanager"
 	uncleopa_fe "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm/grpc/servers/generated/opa_eval"
+	entitlements_pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/generated/entitlements"
 	opaPb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/opa"
 	x509Pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/x509"
 	userentitlements_pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/vservices/userentitlements"
@@ -61,13 +64,9 @@ func (h *Handler) Shutdown(ctx context.Context) {}
 // EvalEntitlement implements OpaEvalHandler — evaluates entitlements
 // from IDP claims via the loaded OPA policy.
 //
-// The policy returns a structured EntitlementEvalResult with:
-//   - grant_all: bool (grant every RPC on every service)
-//   - grant_all_<service>: bool (grant every RPC on that service)
-//   - entitlements: object (explicit per-service RPC lists)
-//
-// Kernel expands grant_all flags and merges with explicit entitlements
-// before embedding in the token.
+// The policy returns a TokenEntitlements object directly in the
+// "token_entitlements" key of the eval result. Kernel embeds it
+// in the JWT service_entitlements claim without further expansion.
 func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Caller, req *userentitlements_pb.EntitlementEvalInput) (*userentitlements_pb.EntitlementEvalResult, error) {
 	eval, err := h.getEvaluator("data.entitlements.eval")
 	if err != nil {
@@ -97,46 +96,28 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 		return resp, nil
 	}
 
-	if v, ok := obj["grant_all"].(bool); ok {
-		resp.GrantAll = v
-	}
-	if v, ok := obj["grant_all_sentinel"].(bool); ok {
-		resp.GrantAllSentinel = v
-	}
-	if v, ok := obj["grant_all_gateway"].(bool); ok {
-		resp.GrantAllGateway = v
-	}
-	if v, ok := obj["grant_all_mcp"].(bool); ok {
-		resp.GrantAllMcp = v
-	}
-	if v, ok := obj["grant_all_eventbus"].(bool); ok {
-		resp.GrantAllEventbus = v
-	}
-	if v, ok := obj["grant_all_fleetwood"].(bool); ok {
-		resp.GrantAllFleetwood = v
-	}
-	if v, ok := obj["grant_all_anthropic"].(bool); ok {
-		resp.GrantAllAnthropic = v
-	}
-	if v, ok := obj["grant_all_github"].(bool); ok {
-		resp.GrantAllGithub = v
-	}
-	if v, ok := obj["grant_all_gitlab"].(bool); ok {
-		resp.GrantAllGitlab = v
-	}
-	if v, ok := obj["grant_all_openai"].(bool); ok {
-		resp.GrantAllOpenai = v
+	teRaw, ok := obj["token_entitlements"]
+	if !ok {
+		zap.L().Warn("EvalEntitlement: no token_entitlements in result, returning empty entitlements")
+		return resp, nil
 	}
 
-	// Explicit entitlements are passed through as-is. Kernel handles
-	// the expansion and merge with grant_all flags.
-	// The OPA policy can return per-service RPC lists in the entitlements
-	// field if it needs fine-grained control beyond grant_all.
+	teJSON, err := json.Marshal(teRaw)
+	if err != nil {
+		zap.L().Warn("EvalEntitlement: failed to marshal token_entitlements", zap.Error(err))
+		return resp, nil
+	}
 
-	zap.L().Info("EvalEntitlement response",
-		zap.Bool("grant_all", resp.GrantAll),
-		zap.Bool("grant_all_sentinel", resp.GrantAllSentinel),
-		zap.Bool("grant_all_gateway", resp.GrantAllGateway))
+	te := &entitlements_pb.TokenEntitlements{}
+	if err := protojson.Unmarshal(teJSON, te); err != nil {
+		zap.L().Warn("EvalEntitlement: failed to unmarshal token_entitlements",
+			zap.Error(err), zap.String("json", string(teJSON)))
+		return resp, nil
+	}
+
+	resp.TokenEntitlements = te
+
+	zap.L().Info("EvalEntitlement response", zap.String("token_entitlements", string(teJSON)))
 
 	return resp, nil
 }
