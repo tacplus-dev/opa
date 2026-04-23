@@ -73,9 +73,11 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 		return nil, status.Errorf(codes.FailedPrecondition, "no policy loaded: %v", err)
 	}
 
-	claims := make(map[string]any)
-	for k, v := range req.GetClaims() {
-		claims[k] = v
+	var claims map[string]interface{}
+	if s := req.GetClaims(); s != nil {
+		claims = s.AsMap()
+	} else {
+		claims = make(map[string]interface{})
 	}
 	input := map[string]any{"claims": claims}
 
@@ -109,7 +111,8 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	}
 
 	te := &entitlements_pb.TokenEntitlements{}
-	if err := protojson.Unmarshal(teJSON, te); err != nil {
+	unmarshalOpts := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := unmarshalOpts.Unmarshal(teJSON, te); err != nil {
 		zap.L().Warn("EvalEntitlement: failed to unmarshal token_entitlements",
 			zap.Error(err), zap.String("json", string(teJSON)))
 		return resp, nil
