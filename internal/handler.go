@@ -12,10 +12,12 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/libs/servicemanager"
-	uncleopa_fe "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm/grpc/servers/vservices/userentitlements"
+	backendtoken_fe "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm/grpc/servers/vservices/backendtoken"
+	userentitlements_fe "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm/grpc/servers/vservices/userentitlements"
 	entitlements_pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/generated/entitlements"
 	opaPb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/opa"
 	x509Pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/libs/x509"
+	backendtoken_pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/vservices/backendtoken"
 	userentitlements_pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/vservices/userentitlements"
 	pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/services/uncleopa"
 )
@@ -35,14 +37,46 @@ func NewHandler() *Handler {
 	}
 }
 
-// OpaEvalGrpcImpl returns this handler as the OpaEval gRPC implementation.
-func (h *Handler) OpaEvalGrpcImpl() uncleopa_fe.OpaEvalHandler {
+// LoadBootstrapPolicy loads an OPA policy from the bootstrap config file.
+// This is used to load policies that the kernel may not yet know about
+// (e.g., fields added to the proto after the kernel image was built).
+// Kernel-provided policies will override this if they are non-nil.
+func (h *Handler) LoadBootstrapPolicy(policy *opaPb.OpaPolicy) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if err := h.loadPolicy(policy); err != nil {
+		zap.L().Warn("failed to load bootstrap OPA policy", zap.String("entry_point", policy.GetEntryPoint()), zap.Error(err))
+	}
+}
+
+// BackendtokenOpaEvalGrpcImpl returns this handler as the backendtoken.OpaEval implementation.
+func (h *Handler) BackendtokenOpaEvalGrpcImpl() backendtoken_fe.OpaEvalHandler {
 	return h
 }
 
-// OpaEvalConfig is called by the SM with initial config and on every update.
-// OPA policy bundles are delivered via config (not state).
-func (h *Handler) OpaEvalConfig(cfg *pb.Config) error {
+// UserentitlementsOpaEvalGrpcImpl returns this handler as the userentitlements.OpaEval implementation.
+func (h *Handler) UserentitlementsOpaEvalGrpcImpl() userentitlements_fe.OpaEvalHandler {
+	return h
+}
+
+// BackendtokenOpaEvalConfig is called by the SM with initial config and on every update.
+// Loads the backend_token_policy OPA bundle.
+func (h *Handler) BackendtokenOpaEvalConfig(cfg *pb.Config) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if policy := cfg.GetBackendTokenPolicy(); policy != nil {
+		if err := h.loadPolicy(policy); err != nil {
+			return fmt.Errorf("backend token policy: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// UserentitlementsOpaEvalConfig is called by the SM with initial config and on every update.
+// Loads the entitlements_policy OPA bundle.
+func (h *Handler) UserentitlementsOpaEvalConfig(cfg *pb.Config) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -61,7 +95,7 @@ func (h *Handler) NewTlsCert(certChain *x509Pb.X509CertChain, privateKeyDER []by
 
 func (h *Handler) Shutdown(ctx context.Context) {}
 
-// EvalEntitlement implements OpaEvalHandler — evaluates entitlements
+// EvalEntitlement implements userentitlements_fe.OpaEvalHandler — evaluates entitlements
 // from IDP claims via the loaded OPA policy.
 //
 // The policy returns a TokenEntitlements object directly in the
@@ -125,6 +159,66 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	return resp, nil
 }
 
+// EvalBackendToken implements backendtoken_fe.OpaEvalHandler — evaluates the
+// backend API token for the given caller claims and provider via the loaded
+// backend_token OPA policy.
+func (h *Handler) EvalBackendToken(ctx context.Context, caller *servicemanager.Caller, req *backendtoken_pb.BackendTokenEvalInput) (*backendtoken_pb.BackendTokenEvalResult, error) {
+	eval, err := h.getEvaluator("data.backend_token.eval")
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "no backend token policy loaded: %v", err)
+	}
+
+	var claims map[string]interface{}
+	if s := req.GetClaims(); s != nil {
+		claims = s.AsMap()
+	} else {
+		claims = make(map[string]interface{})
+	}
+	input := map[string]any{
+		"claims":   claims,
+		"provider": req.GetProvider(),
+	}
+
+	zap.L().Info("EvalBackendToken", zap.String("provider", req.GetProvider()))
+
+	result, err := eval.Evaluate(input)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "OPA eval: %v", err)
+	}
+
+	obj, ok := result.(map[string]interface{})
+	if !ok {
+		return nil, status.Errorf(codes.Internal, "backend token policy returned non-object result")
+	}
+
+	tokenRaw, ok := obj["token"]
+	if !ok {
+		return nil, status.Errorf(codes.PermissionDenied, "backend token policy returned no token")
+	}
+
+	token, ok := tokenRaw.(string)
+	if !ok || token == "" {
+		return nil, status.Errorf(codes.PermissionDenied, "backend token policy returned empty token")
+	}
+
+	resp := &backendtoken_pb.BackendTokenEvalResult{Token: token}
+
+	if expRaw, ok := obj["expires_at_secs"]; ok {
+		switch v := expRaw.(type) {
+		case float64:
+			resp.ExpiresAtSecs = int64(v)
+		case int64:
+			resp.ExpiresAtSecs = v
+		case json.Number:
+			if i, err := v.Int64(); err == nil {
+				resp.ExpiresAtSecs = i
+			}
+		}
+	}
+
+	return resp, nil
+}
+
 // loadPolicy creates or replaces a PolicyEvaluator for the given policy.
 func (h *Handler) loadPolicy(policy *opaPb.OpaPolicy) error {
 	ep := policy.GetEntryPoint()
@@ -153,3 +247,5 @@ func (h *Handler) getEvaluator(entryPoint string) (*PolicyEvaluator, error) {
 	}
 	return eval, nil
 }
+
+

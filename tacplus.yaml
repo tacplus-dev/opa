@@ -3,6 +3,6 @@ pkg: com.gitlab.secondstarcavalier.controlplane.services.uncleopa
 output-dir: tacplus
 post-gen:
   - cmd: sh
-    args: [-c, "CGO_ENABLED=0 go build -trimpath -ldflags=\"-s -w\" -o bin/uncleopa ."]
+    args: [-c, "CGO_ENABLED=0 go build -trimpath -ldflags=\"-s -w\" -o bin/uncleopa . && cp bin/uncleopa bin/uncleopa-$(go env GOARCH)"]
 container:
   image: registry.gitlab.com/secondstarcavalier/controlplane/services/uncleopa/uncleopa
