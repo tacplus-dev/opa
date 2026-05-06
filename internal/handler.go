@@ -12,12 +12,12 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/libs/servicemanager"
-	backendtoken_fe "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/s2sm/grpc/servers/vservices/backendtoken"
+	proxypolicy_fe "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/s2sm/grpc/servers/vservices/proxypolicy"
 	userentitlements_fe "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/s2sm/grpc/servers/vservices/userentitlements"
 	entitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/generated/entitlements"
 	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/libs/opa"
 	x509Pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/libs/x509"
-	backendtoken_pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/vservices/backendtoken"
+	proxypolicy_pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/vservices/proxypolicy"
 	userentitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/vservices/userentitlements"
 	pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/services/uncleopa"
 )
@@ -26,8 +26,8 @@ import (
 // It manages OPA policy evaluators, reloading them when state updates
 // deliver new policy bundles.
 type Handler struct {
-	mu          sync.RWMutex
-	evaluators  map[string]*PolicyEvaluator // keyed by entry_point
+	mu         sync.RWMutex
+	evaluators map[string]*PolicyEvaluator // keyed by entry_point
 }
 
 // NewHandler creates a new Handler.
@@ -49,8 +49,8 @@ func (h *Handler) LoadBootstrapPolicy(policy *opaPb.OpaPolicy) {
 	}
 }
 
-// BackendtokenOpaEvalGrpcImpl returns this handler as the backendtoken.OpaEval implementation.
-func (h *Handler) BackendtokenOpaEvalGrpcImpl() backendtoken_fe.OpaEvalHandler {
+// ProxypolicyOpaEvalGrpcImpl returns this handler as the proxypolicy.OpaEval implementation.
+func (h *Handler) ProxypolicyOpaEvalGrpcImpl() proxypolicy_fe.OpaEvalHandler {
 	return h
 }
 
@@ -59,15 +59,15 @@ func (h *Handler) UserentitlementsOpaEvalGrpcImpl() userentitlements_fe.OpaEvalH
 	return h
 }
 
-// BackendtokenOpaEvalConfig is called by the SM with initial config and on every update.
-// Loads the backend_token_policy OPA bundle.
-func (h *Handler) BackendtokenOpaEvalConfig(cfg *pb.Config) error {
+// ProxypolicyOpaEvalConfig is called by the SM with initial config and on every update.
+// Loads the proxy_policy OPA bundle.
+func (h *Handler) ProxypolicyOpaEvalConfig(cfg *pb.Config) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if policy := cfg.GetBackendTokenPolicy(); policy != nil {
+	if policy := cfg.GetProxyPolicy(); policy != nil {
 		if err := h.loadPolicy(policy); err != nil {
-			return fmt.Errorf("backend token policy: %w", err)
+			return fmt.Errorf("proxy policy: %w", err)
 		}
 	}
 
@@ -159,13 +159,20 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	return resp, nil
 }
 
-// EvalBackendToken implements backendtoken_fe.OpaEvalHandler — evaluates the
-// backend API token for the given caller claims and provider via the loaded
-// backend_token OPA policy.
-func (h *Handler) EvalBackendToken(ctx context.Context, caller *servicemanager.Caller, req *backendtoken_pb.BackendTokenEvalInput) (*backendtoken_pb.BackendTokenEvalResult, error) {
-	eval, err := h.getEvaluator("data.backend_token.eval")
+// EvalProxyPolicy implements proxypolicy_fe.OpaEvalHandler — evaluates the
+// proxy policy for the given caller claims and routing metadata.
+//
+// The policy receives {claims, metadata} and returns:
+//   - allow: bool — whether the request is permitted
+//   - url: string — the resolved destination URL (empty = use service default)
+//   - reason: string — denial reason (when allow = false)
+//   - aud: string — optional audience override for the minted token
+//   - extra_claims: object — additional JWT claims to inject
+//   - auth_type: string — credential format ("jwt" or "saml")
+func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Caller, req *proxypolicy_pb.ProxyPolicyEvalInput) (*proxypolicy_pb.ProxyPolicyEvalResult, error) {
+	eval, err := h.getEvaluator("data.proxypolicy.eval")
 	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "no backend token policy loaded: %v", err)
+		return nil, status.Errorf(codes.FailedPrecondition, "no proxy policy loaded: %v", err)
 	}
 
 	var claims map[string]interface{}
@@ -176,10 +183,10 @@ func (h *Handler) EvalBackendToken(ctx context.Context, caller *servicemanager.C
 	}
 	input := map[string]any{
 		"claims":   claims,
-		"provider": req.GetProvider(),
+		"metadata": req.GetMetadata(),
 	}
 
-	zap.L().Info("EvalBackendToken", zap.String("provider", req.GetProvider()))
+	zap.L().Info("EvalProxyPolicy", zap.String("metadata", req.GetMetadata()))
 
 	result, err := eval.Evaluate(input)
 	if err != nil {
@@ -188,33 +195,39 @@ func (h *Handler) EvalBackendToken(ctx context.Context, caller *servicemanager.C
 
 	obj, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, status.Errorf(codes.Internal, "backend token policy returned non-object result")
+		return nil, status.Errorf(codes.Internal, "proxy policy returned non-object result")
 	}
 
-	tokenRaw, ok := obj["token"]
-	if !ok {
-		return nil, status.Errorf(codes.PermissionDenied, "backend token policy returned no token")
-	}
+	resp := &proxypolicy_pb.ProxyPolicyEvalResult{}
 
-	token, ok := tokenRaw.(string)
-	if !ok || token == "" {
-		return nil, status.Errorf(codes.PermissionDenied, "backend token policy returned empty token")
-	}
-
-	resp := &backendtoken_pb.BackendTokenEvalResult{Token: token}
-
-	if expRaw, ok := obj["expires_at_secs"]; ok {
-		switch v := expRaw.(type) {
-		case float64:
-			resp.ExpiresAtSecs = int64(v)
-		case int64:
-			resp.ExpiresAtSecs = v
-		case json.Number:
-			if i, err := v.Int64(); err == nil {
-				resp.ExpiresAtSecs = i
-			}
+	if allowRaw, ok := obj["allow"]; ok {
+		if allow, ok := allowRaw.(bool); ok {
+			resp.Allow = allow
 		}
 	}
+
+	if reasonRaw, ok := obj["reason"]; ok {
+		if reason, ok := reasonRaw.(string); ok {
+			resp.Reason = reason
+		}
+	}
+
+	if urlRaw, ok := obj["url"]; ok {
+		if u, ok := urlRaw.(string); ok {
+			resp.Url = u
+		}
+	}
+
+	if audRaw, ok := obj["aud"]; ok {
+		if aud, ok := audRaw.(string); ok {
+			resp.Aud = aud
+		}
+	}
+
+	zap.L().Info("EvalProxyPolicy result",
+		zap.Bool("allow", resp.Allow),
+		zap.String("url", resp.Url),
+		zap.String("reason", resp.Reason))
 
 	return resp, nil
 }
@@ -247,5 +260,3 @@ func (h *Handler) getEvaluator(entryPoint string) (*PolicyEvaluator, error) {
 	}
 	return eval, nil
 }
-
-

@@ -30,11 +30,11 @@ func main() {
 			cfg, parseErr := pb.ConfigFromBytes(data)
 			if parseErr != nil {
 				log.Printf("bootstrap: failed to parse config: %v", parseErr)
-			} else if policy := cfg.GetBackendTokenPolicy(); policy != nil {
-				log.Printf("bootstrap: loading backend_token_policy (entry_point=%s)", policy.GetEntryPoint())
+			} else if policy := cfg.GetProxyPolicy(); policy != nil {
+				log.Printf("bootstrap: loading proxy_policy (entry_point=%s)", policy.GetEntryPoint())
 				h.LoadBootstrapPolicy(policy)
 			} else {
-				log.Printf("bootstrap: no backend_token_policy in config")
+				log.Printf("bootstrap: no proxy_policy in config")
 			}
 		}
 	}
