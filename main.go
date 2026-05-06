@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	handler "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/internal"
-	servicemanager "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/s2sm"
-	pb "gitlab.com/secondstarcavalier/controlplane/services/uncleopa/tacplus/types/services/uncleopa"
+	handler "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/internal"
+	servicemanager "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/s2sm"
+	pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/services/uncleopa"
 )
 
 func main() {
