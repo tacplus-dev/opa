@@ -16,6 +16,7 @@ import (
 	userentitlements_fe "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/s2sm/grpc/servers/vservices/userentitlements"
 	entitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/generated/entitlements"
 	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/libs/opa"
+	token_pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/libs/token"
 	x509Pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/libs/x509"
 	proxypolicy_pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/vservices/proxypolicy"
 	userentitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/vservices/userentitlements"
@@ -164,11 +165,12 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 //
 // The policy receives {claims, metadata} and returns:
 //   - allow: bool — whether the request is permitted
-//   - url: string — the resolved destination URL (empty = use service default)
+//   - url: string — resolved destination URL (empty = use service default)
 //   - reason: string — denial reason (when allow = false)
-//   - aud: string — optional audience override for the minted token
+//   - append_aud: array[string] — audiences to append to the minted token (never replaces original)
 //   - extra_claims: object — additional JWT claims to inject
 //   - auth_type: string — credential format ("jwt" or "saml")
+//   - token_use: string or int — token_use claim; must be "TOKEN_USE_EXTERNAL"/6 or unset
 func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Caller, req *proxypolicy_pb.ProxyPolicyEvalInput) (*proxypolicy_pb.ProxyPolicyEvalResult, error) {
 	eval, err := h.getEvaluator("data.proxypolicy.eval")
 	if err != nil {
@@ -218,10 +220,24 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 		}
 	}
 
-	if audRaw, ok := obj["aud"]; ok {
-		if aud, ok := audRaw.(string); ok {
-			resp.Aud = aud
+	if appendAudRaw, ok := obj["append_aud"]; ok {
+		switch v := appendAudRaw.(type) {
+		case []interface{}:
+			for _, item := range v {
+				if s, ok := item.(string); ok && s != "" {
+					resp.AppendAud = append(resp.AppendAud, s)
+				}
+			}
+		case string:
+			// Tolerate a bare string for single-audience policies.
+			if v != "" {
+				resp.AppendAud = append(resp.AppendAud, v)
+			}
 		}
+	}
+
+	if tokenUseRaw, ok := obj["token_use"]; ok {
+		resp.TokenUse = parseTokenUse(tokenUseRaw)
 	}
 
 	zap.L().Info("EvalProxyPolicy result",
@@ -247,6 +263,27 @@ func (h *Handler) loadPolicy(policy *opaPb.OpaPolicy) error {
 	h.evaluators[ep] = eval
 	zap.L().Info("loaded OPA policy", zap.String("entry_point", ep))
 	return nil
+}
+
+// parseTokenUse converts an OPA-returned token_use value (string name or number) to the
+// token.TokenUse enum. Returns TOKEN_USE_UNSPECIFIED for unrecognized values.
+// OPA policies may return the string name ("TOKEN_USE_EXTERNAL") or the integer value (6).
+func parseTokenUse(raw interface{}) token_pb.TokenUse {
+	switch v := raw.(type) {
+	case string:
+		if tu, err := token_pb.ParseTokenUse(v); err == nil {
+			return tu
+		}
+		// Also accept short form without prefix.
+		if tu, err := token_pb.ParseTokenUse("TOKEN_USE_" + v); err == nil {
+			return tu
+		}
+	case float64:
+		return token_pb.TokenUse(int32(v))
+	case int64:
+		return token_pb.TokenUse(int32(v))
+	}
+	return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
 }
 
 // getEvaluator returns the PolicyEvaluator for the given entry_point.
