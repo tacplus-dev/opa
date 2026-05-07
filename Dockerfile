@@ -15,10 +15,9 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.title="Uncle OPA" \
       org.opencontainers.image.description="OPA policy evaluation service for Cavalier control plane"
 
-ARG TARGETARCH
 RUN addgroup -S uncleopa && adduser -S uncleopa -G uncleopa
 
-COPY bin/uncleopa-${TARGETARCH} /usr/local/bin/uncleopa
+COPY bin/uncleopa /usr/local/bin/uncleopa
 RUN chmod +x /usr/local/bin/uncleopa
 
 USER uncleopa
