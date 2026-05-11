@@ -1,5 +1,5 @@
 # Uncle OPA Release Image
-# Layers the uncleopa binary onto a minimal Alpine base.
+# Layers the opa binary onto a minimal Alpine base.
 
 FROM registry.gitlab.com/secondstarcavalier/schematic/containers/alpine/schematic-alpine-1-2:latest
 
@@ -15,11 +15,11 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.title="Uncle OPA" \
       org.opencontainers.image.description="OPA policy evaluation service for Cavalier control plane"
 
-RUN addgroup -S uncleopa && adduser -S uncleopa -G uncleopa
+RUN addgroup -S opa && adduser -S opa -G opa
 
-COPY bin/uncleopa /usr/local/bin/uncleopa
-RUN chmod +x /usr/local/bin/uncleopa
+COPY bin/opa /usr/local/bin/opa
+RUN chmod +x /usr/local/bin/opa
 
-USER uncleopa
+USER opa
 
-ENTRYPOINT ["uncleopa"]
+ENTRYPOINT ["opa"]
