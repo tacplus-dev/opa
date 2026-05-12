@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	handler "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/internal"
-	servicemanager "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/s2sm"
-	pb "gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa/tacplus/types/services/uncleopa"
+	handler "gitlab.com/secondstarcavalier/schematic/platform/services/opa/internal"
+	servicemanager "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/s2sm"
+	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/services/opa"
 )
 
 func main() {
@@ -40,6 +40,6 @@ func main() {
 	}
 
 	if err := sm.Run(h); err != nil {
-		log.Fatalf("uncleopa: %v", err)
+		log.Fatalf("opa: %v", err)
 	}
 }

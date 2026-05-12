@@ -1,4 +1,4 @@
-module gitlab.com/secondstarcavalier/schematic/platform/services/uncleopa
+module gitlab.com/secondstarcavalier/schematic/platform/services/opa
 
 go 1.25.5
 
