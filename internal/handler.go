@@ -15,7 +15,7 @@ import (
 	proxypolicy_fe "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/s2sm/grpc/servers/vservices/proxypolicy"
 	userentitlements_fe "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/s2sm/grpc/servers/vservices/userentitlements"
 	entitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/generated/entitlements"
-	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/opa"
+	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/opalib"
 	token_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/token"
 	x509Pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/x509"
 	proxypolicy_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/vservices/proxypolicy"

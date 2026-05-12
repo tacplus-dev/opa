@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	fsPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/filesystem"
-	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/opa"
+	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/opalib"
 )
 
 // PolicyEvaluator evaluates OPA policies to determine user profiles
