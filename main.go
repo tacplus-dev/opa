@@ -30,11 +30,17 @@ func main() {
 			cfg, parseErr := pb.ConfigFromBytes(data)
 			if parseErr != nil {
 				log.Printf("bootstrap: failed to parse config: %v", parseErr)
-			} else if policy := cfg.GetProxyPolicy(); policy != nil {
-				log.Printf("bootstrap: loading proxy_policy (entry_point=%s)", policy.GetEntryPoint())
-				h.LoadBootstrapPolicy(policy)
 			} else {
-				log.Printf("bootstrap: no proxy_policy in config")
+				if policy := cfg.GetProxyPolicy(); policy != nil {
+					log.Printf("bootstrap: loading proxy_policy (entry_point=%s)", policy.GetEntryPoint())
+					h.LoadBootstrapPolicy(policy)
+				} else {
+					log.Printf("bootstrap: no proxy_policy in config")
+				}
+				if policy := cfg.GetEntitlementsPolicy(); policy != nil {
+					log.Printf("bootstrap: loading entitlements_policy (entry_point=%s)", policy.GetEntryPoint())
+					h.LoadBootstrapPolicy(policy)
+				}
 			}
 		}
 	}
