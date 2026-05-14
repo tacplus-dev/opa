@@ -66,6 +66,9 @@ build-arm64:
   image: docker:latest
   services:
     - docker:dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+-[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.\d+$/
   before_script:
@@ -73,14 +76,15 @@ build-arm64:
     # Pre-pull the Dockerfile base image using group credentials (DOCKER_AUTH_CONFIG
     # has an oauth2 token with cross-project read access). After pulling it into
     # the local daemon cache, we switch to the CI job token (write access) for push.
-    - docker pull "$(head -20 Dockerfile | grep '^FROM' | head -1 | awk '{print $2}')" || true
+    - docker pull --platform linux/${ARCH} "$(head -20 Dockerfile | grep '^FROM' | head -1 | awk '{print $2}')" || true
     - unset DOCKER_AUTH_CONFIG
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
     - |
       IMAGE="$CI_REGISTRY_IMAGE/opa-${MAJOR}-${MINOR}"
-      docker pull "${IMAGE}:${CI_COMMIT_TAG}-${ARCH}" || true
+      docker pull --platform linux/${ARCH} "${IMAGE}:${CI_COMMIT_TAG}-${ARCH}" || true
       docker build \
+        --platform linux/${ARCH} \
         --cache-from "${IMAGE}:${CI_COMMIT_TAG}-${ARCH}" \
         -t "${IMAGE}:${CI_COMMIT_TAG}-${ARCH}" \
         .
@@ -99,6 +103,9 @@ manifest:
   image: docker:latest
   services:
     - docker:dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   needs: [package-arm64]
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+-[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.\d+$/
@@ -107,13 +114,13 @@ manifest:
     # Pre-pull the Dockerfile base image using group credentials (DOCKER_AUTH_CONFIG
     # has an oauth2 token with cross-project read access). After pulling it into
     # the local daemon cache, we switch to the CI job token (write access) for push.
-    - docker pull "$(head -20 Dockerfile | grep '^FROM' | head -1 | awk '{print $2}')" || true
+    - docker pull --platform linux/arm64 "$(head -20 Dockerfile | grep '^FROM' | head -1 | awk '{print $2}')" || true
     - unset DOCKER_AUTH_CONFIG
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
     - |
       IMAGE="$CI_REGISTRY_IMAGE/opa-${MAJOR}-${MINOR}"
-      docker pull "${IMAGE}:${CI_COMMIT_TAG}-arm64"
+      docker pull --platform linux/arm64 "${IMAGE}:${CI_COMMIT_TAG}-arm64"
       docker tag "${IMAGE}:${CI_COMMIT_TAG}-arm64" "${IMAGE}:${CI_COMMIT_TAG}"
       docker push "${IMAGE}:${CI_COMMIT_TAG}"
 # ---------------------------------------------------------------------------
