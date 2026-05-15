@@ -15,11 +15,6 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.title="Uncle OPA" \
       org.opencontainers.image.description="OPA policy evaluation service for Cavalier control plane"
 
-RUN addgroup -S opa && adduser -S opa -G opa
-
 COPY bin/opa /usr/local/bin/opa
-RUN chmod +x /usr/local/bin/opa
-
-USER opa
 
 ENTRYPOINT ["opa"]
