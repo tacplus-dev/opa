@@ -25,23 +25,21 @@ func main() {
 	if bootstrapPath != "" {
 		data, readErr := os.ReadFile(bootstrapPath)
 		if readErr != nil {
-			log.Printf("bootstrap: failed to read %s: %v", bootstrapPath, readErr)
+			log.Fatalf("bootstrap: failed to read %s: %v", bootstrapPath, readErr)
+		}
+		cfg, parseErr := pb.ConfigFromBytes(data)
+		if parseErr != nil {
+			log.Fatalf("bootstrap: failed to parse config: %v", parseErr)
+		}
+		if policy := cfg.GetProxyPolicy(); policy != nil {
+			log.Printf("bootstrap: loading proxy_policy (entry_point=%s)", policy.GetEntryPoint())
+			h.LoadBootstrapPolicy(policy)
 		} else {
-			cfg, parseErr := pb.ConfigFromBytes(data)
-			if parseErr != nil {
-				log.Printf("bootstrap: failed to parse config: %v", parseErr)
-			} else {
-				if policy := cfg.GetProxyPolicy(); policy != nil {
-					log.Printf("bootstrap: loading proxy_policy (entry_point=%s)", policy.GetEntryPoint())
-					h.LoadBootstrapPolicy(policy)
-				} else {
-					log.Printf("bootstrap: no proxy_policy in config")
-				}
-				if policy := cfg.GetEntitlementsPolicy(); policy != nil {
-					log.Printf("bootstrap: loading entitlements_policy (entry_point=%s)", policy.GetEntryPoint())
-					h.LoadBootstrapPolicy(policy)
-				}
-			}
+			log.Printf("bootstrap: no proxy_policy in config")
+		}
+		if policy := cfg.GetEntitlementsPolicy(); policy != nil {
+			log.Printf("bootstrap: loading entitlements_policy (entry_point=%s)", policy.GetEntryPoint())
+			h.LoadBootstrapPolicy(policy)
 		}
 	}
 

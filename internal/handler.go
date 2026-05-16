@@ -202,10 +202,13 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 
 	resp := &proxypolicy_pb.ProxyPolicyEvalResult{}
 
-	if allowRaw, ok := obj["allow"]; ok {
-		if allow, ok := allowRaw.(bool); ok {
-			resp.Allow = allow
-		}
+	if allowRaw, ok := obj["allow"]; !ok {
+		zap.L().Warn("EvalProxyPolicy: policy result missing 'allow' field, defaulting to deny")
+	} else if allow, ok := allowRaw.(bool); ok {
+		resp.Allow = allow
+	} else {
+		zap.L().Warn("EvalProxyPolicy: 'allow' field is not a bool, defaulting to deny",
+			zap.Any("allow_value", allowRaw))
 	}
 
 	if reasonRaw, ok := obj["reason"]; ok {
