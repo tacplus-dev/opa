@@ -133,6 +133,15 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 		return resp, nil
 	}
 
+	// Check for all_entitlements: true (admin shortcut — grants unrestricted access).
+	if allRaw, ok := obj["all_entitlements"]; ok {
+		if allBool, ok := allRaw.(bool); ok && allBool {
+			resp.AllEntitlements = true
+			zap.L().Info("EvalEntitlement: all_entitlements=true")
+			return resp, nil
+		}
+	}
+
 	teRaw, ok := obj["token_entitlements"]
 	if !ok {
 		zap.L().Warn("EvalEntitlement: no token_entitlements in result, returning empty entitlements")
