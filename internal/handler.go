@@ -133,11 +133,28 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 		return resp, nil
 	}
 
-	// Check for all_entitlements: true (admin shortcut — grants unrestricted access).
+	// all_entitlements: true — expand to explicit per-service grants.
+	// The JWT must always contain named entitlements (not a boolean wildcard)
+	// so that multi-tenancy can constrain what "all" means per tenant.
 	if allRaw, ok := obj["all_entitlements"]; ok {
 		if allBool, ok := allRaw.(bool); ok && allBool {
-			resp.AllEntitlements = true
-			zap.L().Info("EvalEntitlement: all_entitlements=true")
+			allJSON := []byte(`{
+				"sentinel":["SENTINEL_RPCS_ANY"],"gateway":["GATEWAY_RPCS_ANY"],
+				"mcp":["MCP_RPCS_ANY"],"eventbus":["EVENTBUS_RPCS_ANY"],
+				"oauth":["OAUTH_RPCS_ANY"],"anthropic":["ANTHROPIC_RPCS_ANY"],
+				"github":["GITHUB_RPCS_ANY"],"gitlab":["GITLAB_RPCS_ANY"],
+				"openai":["OPENAI_RPCS_ANY"],"argus":["ARGUS_RPCS_ANY"],
+				"saml":["SAML_RPCS_ANY"],"config":["CONFIG_RPCS_ANY"],
+				"claudesensor":["CLAUDESENSOR_RPCS_ANY"],
+				"scmsensor":["SCMSENSOR_RPCS_ANY"],"llmsensor":["LLMSENSOR_RPCS_ANY"]
+			}`)
+			te := &entitlements_pb.TokenEntitlements{}
+			if err := protojson.Unmarshal(allJSON, te); err != nil {
+				zap.L().Error("EvalEntitlement: failed to expand all_entitlements", zap.Error(err))
+				return resp, nil
+			}
+			resp.TokenEntitlements = te
+			zap.L().Info("EvalEntitlement: expanded all_entitlements to explicit grants")
 			return resp, nil
 		}
 	}
