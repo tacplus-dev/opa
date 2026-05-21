@@ -2,8 +2,3 @@ tacplus-version: "1.2.x"
 language: go
 pkg: com.gitlab.secondstarcavalier.controlplane.cavalier.services.opa
 output-dir: tacplus
-post-gen:
-  - cmd: sh
-    args: [-c, "CGO_ENABLED=0 go build -trimpath -ldflags=\"-s -w\" -o bin/opa . && cp bin/opa bin/opa-$(go env GOARCH)"]
-container:
-  image: registry.gitlab.com/secondstarcavalier/schematic/platform/services/opa/opa
