@@ -114,7 +114,10 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	} else {
 		claims = make(map[string]interface{})
 	}
-	input := map[string]any{"claims": claims}
+	// namespace is the caller's tenant namespace (v3: IDP+OPA at the tenant).
+	// Forward it so the policy can branch on tenant when computing entitlements,
+	// authorized projects, and the default project.
+	input := map[string]any{"claims": claims, "namespace": req.GetNamespace()}
 
 	zap.L().Info("EvalEntitlement input", zap.Any("input", input))
 
@@ -140,6 +143,24 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	if nsRaw, ok := obj["namespace"]; ok {
 		if ns, ok := nsRaw.(string); ok {
 			resp.Namespace = ns
+		}
+	}
+
+	// authorized_projects + default_project (v3): the project leaf names the
+	// caller may obtain an access token for, and the one to scope to at login.
+	// Set before any early return so they are carried on every entitlement path.
+	if apRaw, ok := obj["authorized_projects"]; ok {
+		if apList, ok := apRaw.([]interface{}); ok {
+			for _, p := range apList {
+				if ps, ok := p.(string); ok {
+					resp.AuthorizedProjects = append(resp.AuthorizedProjects, ps)
+				}
+			}
+		}
+	}
+	if dpRaw, ok := obj["default_project"]; ok {
+		if dp, ok := dpRaw.(string); ok {
+			resp.DefaultProject = dp
 		}
 	}
 
