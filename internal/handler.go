@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 
 	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/libs/servicemanager"
 	proxypolicy_fe "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/s2sm/grpc/servers/vservices/proxypolicy"
@@ -300,10 +301,26 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 		resp.TokenUse = parseTokenUse(tokenUseRaw)
 	}
 
+	// extra_claims: additional JWT claims the kernel stamps into the minted
+	// external token (e.g. anthropic federation_rule_id). The rego returns a
+	// plain object; convert it to a protobuf Struct. Without this mapping the
+	// claims are silently dropped before reaching the kernel.
+	if extraRaw, ok := obj["extra_claims"]; ok {
+		if m, ok := extraRaw.(map[string]interface{}); ok {
+			if s, err := structpb.NewStruct(m); err == nil {
+				resp.ExtraClaims = s
+			} else {
+				zap.L().Warn("EvalProxyPolicy: failed to convert extra_claims to struct",
+					zap.Error(err))
+			}
+		}
+	}
+
 	zap.L().Info("EvalProxyPolicy result",
 		zap.Bool("allow", resp.Allow),
 		zap.String("url", resp.Url),
-		zap.String("reason", resp.Reason))
+		zap.String("reason", resp.Reason),
+		zap.Bool("extra_claims", resp.ExtraClaims != nil))
 
 	return resp, nil
 }
