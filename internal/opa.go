@@ -8,8 +8,8 @@ import (
 	"github.com/open-policy-agent/opa/v1/rego"
 	"go.uber.org/zap"
 
-	fsPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/filesystem"
-	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/libs/opalib"
+	fsPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/libs/filesystem"
+	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/libs/opalib"
 )
 
 // PolicyEvaluator evaluates OPA policies to determine user profiles

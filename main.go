@@ -5,8 +5,8 @@ import (
 	"os"
 
 	handler "gitlab.com/secondstarcavalier/schematic/platform/services/opa/internal"
-	servicemanager "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/s2sm"
-	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/tacplus/types/services/opa"
+	servicemanager "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/s2sm"
+	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/services/opa"
 )
 
 func main() {
