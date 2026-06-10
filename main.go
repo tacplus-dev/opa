@@ -15,6 +15,10 @@ func main() {
 		log.Fatalf("servicemanager: %v", err)
 	}
 
+	kernelCallers := []string{"kernel", "local/dev/kernel"}
+	sm.Authorizer().SetMethodAuth("EvalEntitlement", kernelCallers)
+	sm.Authorizer().SetMethodAuth("EvalProxyPolicy", kernelCallers)
+
 	h := handler.NewHandler()
 
 	// Load OPA policies from the local bootstrap config file.
