@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 
 	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/libs/servicemanager"
@@ -19,9 +21,9 @@ import (
 	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/libs/opalib"
 	token_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/libs/token"
 	x509Pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/libs/x509"
+	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/services/opa"
 	proxypolicy_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/proxypolicy"
 	userentitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/userentitlements"
-	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/services/opa"
 )
 
 // Handler implements the service-manager Handler interface for opa.
@@ -165,28 +167,21 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 		}
 	}
 
-	// all_entitlements: true — expand to explicit per-service grants.
+	// all_entitlements: true — expand to explicit flat grant strings.
 	// The JWT must always contain named entitlements (not a boolean wildcard)
 	// so that multi-tenancy can constrain what "all" means per tenant.
 	if allRaw, ok := obj["all_entitlements"]; ok {
 		if allBool, ok := allRaw.(bool); ok && allBool {
-			allJSON := []byte(`{
-				"sentinel":["SENTINEL_RPCS_ANY"],"gateway":["GATEWAY_RPCS_ANY"],
-				"mcp":["MCP_RPCS_ANY"],"eventbus":["EVENTBUS_RPCS_ANY"],
-				"oauth":["OAUTH_RPCS_ANY"],"anthropic":["ANTHROPIC_RPCS_ANY"],
-				"github":["GITHUB_RPCS_ANY"],"gitlab":["GITLAB_RPCS_ANY"],
-				"openai":["OPENAI_RPCS_ANY"],"argus":["ARGUS_RPCS_ANY"],
-				"saml":["SAML_RPCS_ANY"],"config":["CONFIG_RPCS_ANY"],
-				"claudesensor":["CLAUDESENSOR_RPCS_ANY"],
-				"scmsensor":["SCMSENSOR_RPCS_ANY"],"llmsensor":["LLMSENSOR_RPCS_ANY"]
-			}`)
-			te := &entitlements_pb.TokenEntitlements{}
-			if err := protojson.Unmarshal(allJSON, te); err != nil {
+			te, normalizedJSON, err := tokenEntitlementsFromValue(map[string]any{
+				"grants": allEntitlementGrantTokens(),
+			})
+			if err != nil {
 				zap.L().Error("EvalEntitlement: failed to expand all_entitlements", zap.Error(err))
 				return resp, nil
 			}
 			resp.TokenEntitlements = te
-			zap.L().Info("EvalEntitlement: expanded all_entitlements to explicit grants")
+			zap.L().Info("EvalEntitlement: expanded all_entitlements to explicit grants",
+				zap.String("token_entitlements", string(normalizedJSON)))
 			return resp, nil
 		}
 	}
@@ -197,25 +192,171 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 		return resp, nil
 	}
 
-	teJSON, err := json.Marshal(teRaw)
+	te, normalizedJSON, err := tokenEntitlementsFromValue(teRaw)
 	if err != nil {
-		zap.L().Warn("EvalEntitlement: failed to marshal token_entitlements", zap.Error(err))
-		return resp, nil
-	}
-
-	te := &entitlements_pb.TokenEntitlements{}
-	unmarshalOpts := protojson.UnmarshalOptions{DiscardUnknown: true}
-	if err := unmarshalOpts.Unmarshal(teJSON, te); err != nil {
 		zap.L().Warn("EvalEntitlement: failed to unmarshal token_entitlements",
-			zap.Error(err), zap.String("json", string(teJSON)))
+			zap.Error(err))
 		return resp, nil
 	}
 
 	resp.TokenEntitlements = te
 
-	zap.L().Info("EvalEntitlement response", zap.String("token_entitlements", string(teJSON)))
+	zap.L().Info("EvalEntitlement response", zap.String("token_entitlements", string(normalizedJSON)))
 
 	return resp, nil
+}
+
+func allEntitlementGrantTokens() []string {
+	return []string{
+		"SENTINEL_RPCS_ANY",
+		"GATEWAY_RPCS_ANY",
+		"MCP_RPCS_ANY",
+		"EVENTBUS_RPCS_ANY",
+		"OAUTH_RPCS_ANY",
+		"ANTHROPIC_RPCS_ANY",
+		"GITHUB_RPCS_ANY",
+		"GITLAB_RPCS_ANY",
+		"OPENAI_RPCS_ANY",
+		"ARGUS_RPCS_ANY",
+		"SAML_RPCS_ANY",
+		"CONFIG_RPCS_ANY",
+		"CLAUDESENSOR_RPCS_ANY",
+		"SCMSENSOR_RPCS_ANY",
+		"LLMSENSOR_RPCS_ANY",
+	}
+}
+
+func tokenEntitlementsFromValue(raw any) (*entitlements_pb.TokenEntitlements, []byte, error) {
+	normalizedJSON, err := normalizeTokenEntitlementsJSON(raw)
+	if err != nil {
+		return nil, nil, err
+	}
+	te := &entitlements_pb.TokenEntitlements{}
+	unmarshalOpts := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := unmarshalOpts.Unmarshal(normalizedJSON, te); err != nil {
+		return nil, normalizedJSON, err
+	}
+	return te, normalizedJSON, nil
+}
+
+func normalizeTokenEntitlementsJSON(raw any) ([]byte, error) {
+	tokens, azp := collectEntitlementTokens(raw)
+	out := map[string]any{}
+	if tokenEntitlementGrantsAreStrings() {
+		out["grants"] = tokens
+	} else {
+		grants := make([]map[string]string, 0, len(tokens))
+		for _, token := range tokens {
+			grants = append(grants, map[string]string{"token": token})
+		}
+		out["grants"] = grants
+	}
+	if len(azp) > 0 {
+		out["azp"] = azp
+	}
+	return json.Marshal(out)
+}
+
+func tokenEntitlementGrantsAreStrings() bool {
+	fd := (&entitlements_pb.TokenEntitlements{}).ProtoReflect().Descriptor().Fields().ByName("grants")
+	return fd != nil && fd.Kind() == protoreflect.StringKind
+}
+
+func collectEntitlementTokens(raw any) ([]string, []string) {
+	tokens := make([]string, 0)
+	azp := make([]string, 0)
+	collectEntitlementTokensInto(raw, &tokens, &azp)
+	return dedupeStrings(tokens), dedupeStrings(azp)
+}
+
+func collectEntitlementTokensInto(raw any, tokens *[]string, azp *[]string) {
+	switch v := raw.(type) {
+	case nil:
+		return
+	case string:
+		if v != "" {
+			*tokens = append(*tokens, v)
+		}
+	case []string:
+		for _, item := range v {
+			if item != "" {
+				*tokens = append(*tokens, item)
+			}
+		}
+	case []any:
+		for _, item := range v {
+			collectEntitlementTokensInto(item, tokens, azp)
+		}
+	case map[string]string:
+		if token := v["token"]; token != "" {
+			*tokens = append(*tokens, token)
+		}
+	case map[string]any:
+		collectEntitlementObject(v, tokens, azp)
+	default:
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return
+		}
+		var decoded any
+		if err := json.Unmarshal(encoded, &decoded); err == nil {
+			collectEntitlementTokensInto(decoded, tokens, azp)
+		}
+	}
+}
+
+func collectEntitlementObject(obj map[string]any, tokens *[]string, azp *[]string) {
+	if token, ok := obj["token"].(string); ok && token != "" {
+		*tokens = append(*tokens, token)
+	}
+	if grants, ok := obj["grants"]; ok {
+		collectEntitlementTokensInto(grants, tokens, azp)
+	}
+	if azpRaw, ok := obj["azp"]; ok {
+		collectStringsInto(azpRaw, azp)
+	}
+	keys := make([]string, 0, len(obj))
+	for key := range obj {
+		if key != "token" && key != "grants" && key != "azp" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		collectEntitlementTokensInto(obj[key], tokens, azp)
+	}
+}
+
+func collectStringsInto(raw any, out *[]string) {
+	switch v := raw.(type) {
+	case string:
+		if v != "" {
+			*out = append(*out, v)
+		}
+	case []string:
+		for _, item := range v {
+			if item != "" {
+				*out = append(*out, item)
+			}
+		}
+	case []any:
+		for _, item := range v {
+			collectStringsInto(item, out)
+		}
+	}
+}
+
+func dedupeStrings(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, item := range in {
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	return out
 }
 
 // EvalProxyPolicy implements proxypolicy_fe.OpaEvalHandler — evaluates the
