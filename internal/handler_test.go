@@ -52,6 +52,18 @@ func TestTokenEntitlementsFromValueAcceptsLegacyServiceMap(t *testing.T) {
 	}
 }
 
+func TestAllEntitlementsUseGeneratedGrantNames(t *testing.T) {
+	tokens := allEntitlementGrantTokens()
+	if !containsString(tokens, "ANTHROPIC_ANY") {
+		t.Fatalf("allEntitlementGrantTokens() missing ANTHROPIC_ANY: %v", tokens)
+	}
+	for _, token := range tokens {
+		if len(token) >= len("_RPCS_ANY") && token[len(token)-len("_RPCS_ANY"):] == "_RPCS_ANY" {
+			t.Fatalf("allEntitlementGrantTokens() returned legacy grant %q", token)
+		}
+	}
+}
+
 func firstGrantToken(t *testing.T, te *entitlements_pb.TokenEntitlements) string {
 	t.Helper()
 	fd := te.ProtoReflect().Descriptor().Fields().ByName("grants")
@@ -72,6 +84,15 @@ func firstGrantToken(t *testing.T, te *entitlements_pb.TokenEntitlements) string
 		t.Fatal("EntitlementGrant has no token field")
 	}
 	return msg.Get(tokenFd).String()
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func sameStrings(got, want []string) bool {
