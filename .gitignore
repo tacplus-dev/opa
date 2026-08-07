@@ -7,6 +7,9 @@ bin/
 *.out
 model/
 
+# Build output (tacplus generated-sources tree)
+target/
+
 # macOS
 .DS_Store
 
