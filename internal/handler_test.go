@@ -11,13 +11,13 @@ import (
 func TestCollectEntitlementTokensAcceptsFlatAndWrappedGrants(t *testing.T) {
 	tokens, azp := collectEntitlementTokens(map[string]any{
 		"grants": []any{
-			"OPENAI_RPCS_ANY",
+			"ECHO_RPCS_ANY",
 			map[string]any{"token": "ANTHROPIC_RPCS_ANY"},
 		},
 		"azp": []any{"delegate-a"},
 	})
 
-	if want := []string{"OPENAI_RPCS_ANY", "ANTHROPIC_RPCS_ANY"}; !sameStrings(tokens, want) {
+	if want := []string{"ECHO_RPCS_ANY", "ANTHROPIC_RPCS_ANY"}; !sameStrings(tokens, want) {
 		t.Fatalf("tokens = %v, want %v", tokens, want)
 	}
 	if want := []string{"delegate-a"}; !sameStrings(azp, want) {
@@ -27,7 +27,7 @@ func TestCollectEntitlementTokensAcceptsFlatAndWrappedGrants(t *testing.T) {
 
 func TestTokenEntitlementsFromValueAcceptsFlatGrants(t *testing.T) {
 	te, normalizedJSON, err := tokenEntitlementsFromValue(map[string]any{
-		"grants": []any{"OPENAI_RPCS_ANY"},
+		"grants": []any{"ECHO_RPCS_ANY"},
 	})
 	if err != nil {
 		t.Fatalf("tokenEntitlementsFromValue returned error: %v", err)
@@ -35,20 +35,20 @@ func TestTokenEntitlementsFromValueAcceptsFlatGrants(t *testing.T) {
 	if !json.Valid(normalizedJSON) {
 		t.Fatalf("normalized JSON is invalid: %s", string(normalizedJSON))
 	}
-	if got := firstGrantToken(t, te); got != "OPENAI_RPCS_ANY" {
-		t.Fatalf("first grant = %q, want OPENAI_RPCS_ANY", got)
+	if got := firstGrantToken(t, te); got != "ECHO_RPCS_ANY" {
+		t.Fatalf("first grant = %q, want ECHO_RPCS_ANY", got)
 	}
 }
 
 func TestTokenEntitlementsFromValueAcceptsLegacyServiceMap(t *testing.T) {
 	te, _, err := tokenEntitlementsFromValue(map[string]any{
-		"openai": []any{"OPENAI_RPCS_ANY"},
+		"echo": []any{"ECHO_RPCS_ANY"},
 	})
 	if err != nil {
 		t.Fatalf("tokenEntitlementsFromValue returned error: %v", err)
 	}
-	if got := firstGrantToken(t, te); got != "OPENAI_RPCS_ANY" {
-		t.Fatalf("first grant = %q, want OPENAI_RPCS_ANY", got)
+	if got := firstGrantToken(t, te); got != "ECHO_RPCS_ANY" {
+		t.Fatalf("first grant = %q, want ECHO_RPCS_ANY", got)
 	}
 }
 
