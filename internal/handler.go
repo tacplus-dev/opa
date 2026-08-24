@@ -15,13 +15,14 @@ import (
 	structpb "google.golang.org/protobuf/types/known/structpb"
 
 	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/chassis/servicemanager"
+	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/grants"
 	proxypolicy_fe "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/s2sm/grpc/servers/vservices/proxypolicy"
 	userentitlements_fe "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/s2sm/grpc/servers/vservices/userentitlements"
 	entitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/generated/entitlements"
+	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/services/opa"
 	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/opalib"
 	token_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/token"
 	x509Pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/x509"
-	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/services/opa"
 	proxypolicy_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/proxypolicy"
 	userentitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/userentitlements"
 )
@@ -206,17 +207,29 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	return resp, nil
 }
 
+// allEntitlementGrantTokens returns the package-wide wildcard grant for every
+// package in the GENERATED grant catalog — the explicit grant list that
+// all_entitlements:true expands to.
+//
+// It used to be a hand-written list, and the list rotted: MCP_ANY,
+// ANTHROPIC_ANY, GITHUB_ANY, GITLAB_ANY and OPENAI_ANY named services that had
+// left the platform, so they were not in the catalog and normalized to nothing
+// — an "all entitlements" token that granted a fraction of what it claimed,
+// with no error anywhere. Reading the catalog instead means a service joining
+// or leaving the fleet is picked up by regeneration, not by remembering to edit
+// this function.
+//
+// Capability wildcards (<PKG>_READ_ANY and friends) are deliberately excluded:
+// each is a subset of its package's ANY, so including them would add nothing
+// and make the emitted list noisier.
 func allEntitlementGrantTokens() []string {
-	return []string{
-		"SENTINEL_ANY",
-		"MCP_ANY",
-		"ANTHROPIC_ANY",
-		"GITHUB_ANY",
-		"GITLAB_ANY",
-		"OPENAI_ANY",
-		"ARGUS_ANY",
-		"KERNEL_ANY",
+	var out []string
+	for _, token := range grants.Tokens() {
+		if g, ok := grants.Lookup(token); ok && g.Capability == "ANY" {
+			out = append(out, token)
+		}
 	}
+	return out
 }
 
 func tokenEntitlementsFromValue(raw any) (*entitlements_pb.TokenEntitlements, []byte, error) {

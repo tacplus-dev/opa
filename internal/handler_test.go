@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/grants"
 	entitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/generated/entitlements"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -52,15 +53,33 @@ func TestTokenEntitlementsFromValueAcceptsLegacyServiceMap(t *testing.T) {
 	}
 }
 
+// The old version of this test asserted ANTHROPIC_ANY was present. It was --
+// as a string in a hand-written list, for a service that had left the platform.
+// The token was absent from the generated catalog and normalized to nothing, so
+// the assertion certified a symbol that granted nothing. Assert the property
+// that actually matters instead: every token this returns must be a real
+// package wildcard the generated catalog knows and can expand.
 func TestAllEntitlementsUseGeneratedGrantNames(t *testing.T) {
 	tokens := allEntitlementGrantTokens()
-	if !containsString(tokens, "ANTHROPIC_ANY") {
-		t.Fatalf("allEntitlementGrantTokens() missing ANTHROPIC_ANY: %v", tokens)
+	if len(tokens) == 0 {
+		t.Fatal("allEntitlementGrantTokens() returned nothing")
 	}
 	for _, token := range tokens {
-		if len(token) >= len("_RPCS_ANY") && token[len(token)-len("_RPCS_ANY"):] == "_RPCS_ANY" {
-			t.Fatalf("allEntitlementGrantTokens() returned legacy grant %q", token)
+		g, ok := grants.Lookup(token)
+		if !ok {
+			t.Errorf("token %q is not in the generated grant catalog", token)
+			continue
 		}
+		if g.Capability != "ANY" {
+			t.Errorf("token %q is not a package-wide wildcard (capability %q)", token, g.Capability)
+		}
+		if len(grants.Expand(token)) == 0 {
+			t.Errorf("token %q expands to no RPCs -- it grants nothing", token)
+		}
+	}
+	// The wildcard every prod/user role is minted with must be among them.
+	if !containsString(tokens, "STRATUM_ANY") {
+		t.Errorf("allEntitlementGrantTokens() missing STRATUM_ANY: %v", tokens)
 	}
 }
 
