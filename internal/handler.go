@@ -246,7 +246,7 @@ func tokenEntitlementsFromValue(raw any) (*entitlements_pb.TokenEntitlements, []
 }
 
 func normalizeTokenEntitlementsJSON(raw any) ([]byte, error) {
-	tokens, azp := collectEntitlementTokens(raw)
+	tokens, azp, principalScope := collectEntitlementTokens(raw)
 	out := map[string]any{}
 	if tokenEntitlementGrantsAreStrings() {
 		out["grants"] = tokens
@@ -260,6 +260,14 @@ func normalizeTokenEntitlementsJSON(raw any) ([]byte, error) {
 	if len(azp) > 0 {
 		out["azp"] = azp
 	}
+	// principal_scope rides the same claim bag as the grants: it is how wide the
+	// caller's authority over PRINCIPALS is, and the generated
+	// (spec.owner_default) guard reads it off service_entitlements. Emitted only
+	// when the policy stamped one, so a policy that stamps nothing leaves the
+	// claim absent and every caller fails closed to self.
+	if principalScope != "" {
+		out["principal_scope"] = principalScope
+	}
 	return json.Marshal(out)
 }
 
@@ -268,14 +276,20 @@ func tokenEntitlementGrantsAreStrings() bool {
 	return fd != nil && fd.Kind() == protoreflect.StringKind
 }
 
-func collectEntitlementTokens(raw any) ([]string, []string) {
+// collectEntitlementTokens flattens whatever shape the policy returned into the
+// three things TokenEntitlements carries: the grant tokens, the azp list, and
+// principal_scope. The scope is threaded alongside azp rather than left to the
+// catch-all sweep below, which would otherwise fold its VALUE into the grant
+// list as a grant token nobody ever declared.
+func collectEntitlementTokens(raw any) ([]string, []string, string) {
 	tokens := make([]string, 0)
 	azp := make([]string, 0)
-	collectEntitlementTokensInto(raw, &tokens, &azp)
-	return dedupeStrings(tokens), dedupeStrings(azp)
+	principalScope := ""
+	collectEntitlementTokensInto(raw, &tokens, &azp, &principalScope)
+	return dedupeStrings(tokens), dedupeStrings(azp), principalScope
 }
 
-func collectEntitlementTokensInto(raw any, tokens *[]string, azp *[]string) {
+func collectEntitlementTokensInto(raw any, tokens *[]string, azp *[]string, principalScope *string) {
 	switch v := raw.(type) {
 	case nil:
 		return
@@ -291,14 +305,14 @@ func collectEntitlementTokensInto(raw any, tokens *[]string, azp *[]string) {
 		}
 	case []any:
 		for _, item := range v {
-			collectEntitlementTokensInto(item, tokens, azp)
+			collectEntitlementTokensInto(item, tokens, azp, principalScope)
 		}
 	case map[string]string:
 		if token := v["token"]; token != "" {
 			*tokens = append(*tokens, token)
 		}
 	case map[string]any:
-		collectEntitlementObject(v, tokens, azp)
+		collectEntitlementObject(v, tokens, azp, principalScope)
 	default:
 		encoded, err := json.Marshal(v)
 		if err != nil {
@@ -306,30 +320,33 @@ func collectEntitlementTokensInto(raw any, tokens *[]string, azp *[]string) {
 		}
 		var decoded any
 		if err := json.Unmarshal(encoded, &decoded); err == nil {
-			collectEntitlementTokensInto(decoded, tokens, azp)
+			collectEntitlementTokensInto(decoded, tokens, azp, principalScope)
 		}
 	}
 }
 
-func collectEntitlementObject(obj map[string]any, tokens *[]string, azp *[]string) {
+func collectEntitlementObject(obj map[string]any, tokens *[]string, azp *[]string, principalScope *string) {
 	if token, ok := obj["token"].(string); ok && token != "" {
 		*tokens = append(*tokens, token)
 	}
 	if grants, ok := obj["grants"]; ok {
-		collectEntitlementTokensInto(grants, tokens, azp)
+		collectEntitlementTokensInto(grants, tokens, azp, principalScope)
 	}
 	if azpRaw, ok := obj["azp"]; ok {
 		collectStringsInto(azpRaw, azp)
 	}
+	if scope, ok := obj["principal_scope"].(string); ok && scope != "" {
+		*principalScope = scope
+	}
 	keys := make([]string, 0, len(obj))
 	for key := range obj {
-		if key != "token" && key != "grants" && key != "azp" {
+		if key != "token" && key != "grants" && key != "azp" && key != "principal_scope" {
 			keys = append(keys, key)
 		}
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		collectEntitlementTokensInto(obj[key], tokens, azp)
+		collectEntitlementTokensInto(obj[key], tokens, azp, principalScope)
 	}
 }
 

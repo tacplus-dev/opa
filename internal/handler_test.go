@@ -10,7 +10,7 @@ import (
 )
 
 func TestCollectEntitlementTokensAcceptsFlatAndWrappedGrants(t *testing.T) {
-	tokens, azp := collectEntitlementTokens(map[string]any{
+	tokens, azp, scope := collectEntitlementTokens(map[string]any{
 		"grants": []any{
 			"ECHO_RPCS_ANY",
 			map[string]any{"token": "ANTHROPIC_RPCS_ANY"},
@@ -23,6 +23,77 @@ func TestCollectEntitlementTokensAcceptsFlatAndWrappedGrants(t *testing.T) {
 	}
 	if want := []string{"delegate-a"}; !sameStrings(azp, want) {
 		t.Fatalf("azp = %v, want %v", azp, want)
+	}
+	if scope != "" {
+		t.Fatalf("principal_scope = %q, want empty when the policy stamped none", scope)
+	}
+}
+
+// principal_scope is a SCALAR on the same object as grants, and every key that
+// is not explicitly handled is swept into the grant list. Without its own case
+// the scope VALUE would arrive as a grant token -- a symbol no catalog declares,
+// and one that reads as an entitlement rather than as the width of one. Assert
+// both halves: it lands in the scope, and it does NOT land in the grants.
+func TestCollectEntitlementTokensKeepsPrincipalScopeOutOfGrants(t *testing.T) {
+	tokens, _, scope := collectEntitlementTokens(map[string]any{
+		"grants":          []any{"ECHO_RPCS_ANY"},
+		"principal_scope": "PRINCIPAL_SCOPE_ANY",
+	})
+
+	if want := []string{"ECHO_RPCS_ANY"}; !sameStrings(tokens, want) {
+		t.Fatalf("tokens = %v, want %v", tokens, want)
+	}
+	if scope != "PRINCIPAL_SCOPE_ANY" {
+		t.Fatalf("principal_scope = %q, want PRINCIPAL_SCOPE_ANY", scope)
+	}
+}
+
+// The claim the guard reads is the NORMALIZED JSON, not the policy's raw output,
+// so the scope has to survive normalization too.
+func TestNormalizeTokenEntitlementsJSONCarriesPrincipalScope(t *testing.T) {
+	out, err := normalizeTokenEntitlementsJSON(map[string]any{
+		"grants":          []any{"ECHO_RPCS_ANY"},
+		"principal_scope": "PRINCIPAL_SCOPE_ANY",
+	})
+	if err != nil {
+		t.Fatalf("normalizeTokenEntitlementsJSON returned error: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("normalized JSON does not parse: %v", err)
+	}
+	if got["principal_scope"] != "PRINCIPAL_SCOPE_ANY" {
+		t.Fatalf("normalized principal_scope = %v, want PRINCIPAL_SCOPE_ANY", got["principal_scope"])
+	}
+
+	// Absent from the policy output means absent from the claim: the guard fails
+	// closed to self on an absent claim, and an empty string here would be a
+	// third spelling of the same thing.
+	out, err = normalizeTokenEntitlementsJSON(map[string]any{"grants": []any{"ECHO_RPCS_ANY"}})
+	if err != nil {
+		t.Fatalf("normalizeTokenEntitlementsJSON returned error: %v", err)
+	}
+	got = nil
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("normalized JSON does not parse: %v", err)
+	}
+	if _, ok := got["principal_scope"]; ok {
+		t.Fatalf("principal_scope present in %s, want absent", string(out))
+	}
+}
+
+// The typed proto is what crosses the wire to kernel; a field that normalizes
+// correctly and then does not survive protojson would still reach nobody.
+func TestTokenEntitlementsFromValueCarriesPrincipalScope(t *testing.T) {
+	te, _, err := tokenEntitlementsFromValue(map[string]any{
+		"grants":          []any{"ECHO_RPCS_ANY"},
+		"principal_scope": "PRINCIPAL_SCOPE_ANY",
+	})
+	if err != nil {
+		t.Fatalf("tokenEntitlementsFromValue returned error: %v", err)
+	}
+	if got := te.GetPrincipalScope(); got != "PRINCIPAL_SCOPE_ANY" {
+		t.Fatalf("PrincipalScope = %q, want PRINCIPAL_SCOPE_ANY", got)
 	}
 }
 
