@@ -246,7 +246,7 @@ func tokenEntitlementsFromValue(raw any) (*entitlements_pb.TokenEntitlements, []
 }
 
 func normalizeTokenEntitlementsJSON(raw any) ([]byte, error) {
-	tokens, azp, principalScope := collectEntitlementTokens(raw)
+	tokens, dataGrants, azp, principalScope := collectEntitlementTokens(raw)
 	out := map[string]any{}
 	if tokenEntitlementGrantsAreStrings() {
 		out["grants"] = tokens
@@ -256,6 +256,12 @@ func normalizeTokenEntitlementsJSON(raw any) ([]byte, error) {
 			grants = append(grants, map[string]string{"token": token})
 		}
 		out["grants"] = grants
+	}
+	// data_grants is always a flat repeated string on TokenEntitlements (unlike
+	// grants, it has no dual token-object shape), so it needs no
+	// tokenEntitlementGrantsAreStrings() branch.
+	if len(dataGrants) > 0 {
+		out["data_grants"] = dataGrants
 	}
 	if len(azp) > 0 {
 		out["azp"] = azp
@@ -277,19 +283,23 @@ func tokenEntitlementGrantsAreStrings() bool {
 }
 
 // collectEntitlementTokens flattens whatever shape the policy returned into the
-// three things TokenEntitlements carries: the grant tokens, the azp list, and
-// principal_scope. The scope is threaded alongside azp rather than left to the
-// catch-all sweep below, which would otherwise fold its VALUE into the grant
-// list as a grant token nobody ever declared.
-func collectEntitlementTokens(raw any) ([]string, []string, string) {
+// four things TokenEntitlements carries: the RPC grant tokens, the data-grant
+// tokens, the azp list, and principal_scope. data_grants is threaded alongside
+// grants (rather than left to the catch-all sweep below, which would otherwise
+// fold its VALUE into the grant list as a grant token nobody ever declared) —
+// exactly the bug that made a policy's data_grants entry land in the JWT's
+// grants claim instead of its own data_grants claim, so a MAY_REDACT field's
+// egress check (which reads data_grants specifically) never saw it.
+func collectEntitlementTokens(raw any) ([]string, []string, []string, string) {
 	tokens := make([]string, 0)
+	dataGrants := make([]string, 0)
 	azp := make([]string, 0)
 	principalScope := ""
-	collectEntitlementTokensInto(raw, &tokens, &azp, &principalScope)
-	return dedupeStrings(tokens), dedupeStrings(azp), principalScope
+	collectEntitlementTokensInto(raw, &tokens, &dataGrants, &azp, &principalScope)
+	return dedupeStrings(tokens), dedupeStrings(dataGrants), dedupeStrings(azp), principalScope
 }
 
-func collectEntitlementTokensInto(raw any, tokens *[]string, azp *[]string, principalScope *string) {
+func collectEntitlementTokensInto(raw any, tokens *[]string, dataGrants *[]string, azp *[]string, principalScope *string) {
 	switch v := raw.(type) {
 	case nil:
 		return
@@ -305,14 +315,14 @@ func collectEntitlementTokensInto(raw any, tokens *[]string, azp *[]string, prin
 		}
 	case []any:
 		for _, item := range v {
-			collectEntitlementTokensInto(item, tokens, azp, principalScope)
+			collectEntitlementTokensInto(item, tokens, dataGrants, azp, principalScope)
 		}
 	case map[string]string:
 		if token := v["token"]; token != "" {
 			*tokens = append(*tokens, token)
 		}
 	case map[string]any:
-		collectEntitlementObject(v, tokens, azp, principalScope)
+		collectEntitlementObject(v, tokens, dataGrants, azp, principalScope)
 	default:
 		encoded, err := json.Marshal(v)
 		if err != nil {
@@ -320,17 +330,20 @@ func collectEntitlementTokensInto(raw any, tokens *[]string, azp *[]string, prin
 		}
 		var decoded any
 		if err := json.Unmarshal(encoded, &decoded); err == nil {
-			collectEntitlementTokensInto(decoded, tokens, azp, principalScope)
+			collectEntitlementTokensInto(decoded, tokens, dataGrants, azp, principalScope)
 		}
 	}
 }
 
-func collectEntitlementObject(obj map[string]any, tokens *[]string, azp *[]string, principalScope *string) {
+func collectEntitlementObject(obj map[string]any, tokens *[]string, dataGrants *[]string, azp *[]string, principalScope *string) {
 	if token, ok := obj["token"].(string); ok && token != "" {
 		*tokens = append(*tokens, token)
 	}
 	if grants, ok := obj["grants"]; ok {
-		collectEntitlementTokensInto(grants, tokens, azp, principalScope)
+		collectEntitlementTokensInto(grants, tokens, dataGrants, azp, principalScope)
+	}
+	if dg, ok := obj["data_grants"]; ok {
+		collectStringsInto(dg, dataGrants)
 	}
 	if azpRaw, ok := obj["azp"]; ok {
 		collectStringsInto(azpRaw, azp)
@@ -340,13 +353,13 @@ func collectEntitlementObject(obj map[string]any, tokens *[]string, azp *[]strin
 	}
 	keys := make([]string, 0, len(obj))
 	for key := range obj {
-		if key != "token" && key != "grants" && key != "azp" && key != "principal_scope" {
+		if key != "token" && key != "grants" && key != "data_grants" && key != "azp" && key != "principal_scope" {
 			keys = append(keys, key)
 		}
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		collectEntitlementTokensInto(obj[key], tokens, azp, principalScope)
+		collectEntitlementTokensInto(obj[key], tokens, dataGrants, azp, principalScope)
 	}
 }
 

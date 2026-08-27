@@ -10,7 +10,7 @@ import (
 )
 
 func TestCollectEntitlementTokensAcceptsFlatAndWrappedGrants(t *testing.T) {
-	tokens, azp, scope := collectEntitlementTokens(map[string]any{
+	tokens, _, azp, scope := collectEntitlementTokens(map[string]any{
 		"grants": []any{
 			"ECHO_RPCS_ANY",
 			map[string]any{"token": "ANTHROPIC_RPCS_ANY"},
@@ -35,7 +35,7 @@ func TestCollectEntitlementTokensAcceptsFlatAndWrappedGrants(t *testing.T) {
 // and one that reads as an entitlement rather than as the width of one. Assert
 // both halves: it lands in the scope, and it does NOT land in the grants.
 func TestCollectEntitlementTokensKeepsPrincipalScopeOutOfGrants(t *testing.T) {
-	tokens, _, scope := collectEntitlementTokens(map[string]any{
+	tokens, _, _, scope := collectEntitlementTokens(map[string]any{
 		"grants":          []any{"ECHO_RPCS_ANY"},
 		"principal_scope": "PRINCIPAL_SCOPE_ANY",
 	})
@@ -45,6 +45,52 @@ func TestCollectEntitlementTokensKeepsPrincipalScopeOutOfGrants(t *testing.T) {
 	}
 	if scope != "PRINCIPAL_SCOPE_ANY" {
 		t.Fatalf("principal_scope = %q, want PRINCIPAL_SCOPE_ANY", scope)
+	}
+}
+
+// data_grants (BIG GOAL 3 item 7/9) is a SEPARATE claim from grants: it names
+// what a caller may see RAW on a MAY_REDACT field, not what RPCs it may call.
+// Before this test, a policy's data_grants entry had no dedicated case in
+// collectEntitlementObject and fell into the catch-all sweep, which folds a
+// key's VALUE into the grant list exactly like the principal_scope case above
+// warns against -- so a data_grants token ended up in the JWT's grants claim
+// and never in its own data_grants claim, and every MAY_REDACT field's egress
+// check (which reads data_grants specifically) saw none.
+func TestCollectEntitlementTokensKeepsDataGrantsOutOfGrants(t *testing.T) {
+	tokens, dataGrants, _, _ := collectEntitlementTokens(map[string]any{
+		"grants":      []any{"ECHO_RPCS_ANY"},
+		"data_grants": []any{"ACCOUNTINGRECORD_ACCOUNTING_RECORD_PRINCIPAL_SUB"},
+	})
+
+	if want := []string{"ECHO_RPCS_ANY"}; !sameStrings(tokens, want) {
+		t.Fatalf("tokens = %v, want %v (data_grants must not leak into grants)", tokens, want)
+	}
+	if want := []string{"ACCOUNTINGRECORD_ACCOUNTING_RECORD_PRINCIPAL_SUB"}; !sameStrings(dataGrants, want) {
+		t.Fatalf("dataGrants = %v, want %v", dataGrants, want)
+	}
+}
+
+// The claim the guard reads is the NORMALIZED JSON, not the policy's raw output,
+// so data_grants has to survive normalization too, as its own claim.
+func TestNormalizeTokenEntitlementsJSONCarriesDataGrants(t *testing.T) {
+	out, err := normalizeTokenEntitlementsJSON(map[string]any{
+		"grants":      []any{"ECHO_RPCS_ANY"},
+		"data_grants": []any{"ACCOUNTINGRECORD_ACCOUNTING_RECORD_PRINCIPAL_SUB"},
+	})
+	if err != nil {
+		t.Fatalf("normalizeTokenEntitlementsJSON returned error: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("normalized JSON does not parse: %v", err)
+	}
+	dg, ok := got["data_grants"].([]any)
+	if !ok || len(dg) != 1 || dg[0] != "ACCOUNTINGRECORD_ACCOUNTING_RECORD_PRINCIPAL_SUB" {
+		t.Fatalf("normalized data_grants = %v, want [ACCOUNTINGRECORD_ACCOUNTING_RECORD_PRINCIPAL_SUB]", got["data_grants"])
+	}
+	grantsList, ok := got["grants"].([]any)
+	if !ok || len(grantsList) != 1 || grantsList[0] != "ECHO_RPCS_ANY" {
+		t.Fatalf("normalized grants = %v, want [ECHO_RPCS_ANY] (data_grants must not leak in)", got["grants"])
 	}
 }
 
