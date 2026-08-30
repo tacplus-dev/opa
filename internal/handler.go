@@ -123,7 +123,22 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	// authorized projects, and the default project.
 	input := map[string]any{"claims": claims, "namespace": req.GetNamespace()}
 
-	zap.L().Info("EvalEntitlement input", zap.Any("input", input))
+	// Log the claim KEY NAMES, never the claim map. `input` carries the IDP
+	// claims verbatim -- sub, email, groups -- and zap.Any encodes every one of
+	// them into the log line at INFO. The chassis logger this service already
+	// runs on (logger.InstallFromConfig, wired in by grpcserver) redacts
+	// CREDENTIALS at the sink -- authorization, cookie, *-token, *-secret,
+	// Bearer -- and nothing else, so identity claims pass straight through it.
+	// The key names carry the diagnostic value here (which claims the IDP sent,
+	// which the policy had to work with); the values are the PII.
+	claimKeys := make([]string, 0, len(claims))
+	for k := range claims {
+		claimKeys = append(claimKeys, k)
+	}
+	sort.Strings(claimKeys)
+	zap.L().Info("EvalEntitlement input",
+		zap.String("namespace", req.GetNamespace()),
+		zap.Strings("claim_keys", claimKeys))
 
 	result, err := eval.Evaluate(input)
 	if err != nil {
