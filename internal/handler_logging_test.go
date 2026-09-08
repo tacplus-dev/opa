@@ -67,7 +67,7 @@ eval := {"token_entitlements": {"grants": ["ECHO_RPCS_ANY"]}}
 
 	_, err = h.EvalEntitlement(context.Background(), nil, &userentitlements_pb.EntitlementEvalInput{
 		Claims:    claims,
-		Namespace: "/local/dev/drpepper",
+		Namespace: "/tenants/drpepper",
 	})
 	restore()
 	if err != nil {
@@ -84,7 +84,7 @@ eval := {"token_entitlements": {"grants": ["ECHO_RPCS_ANY"]}}
 
 	// The log line has to stay useful: which claims the IDP sent, and the
 	// tenant the policy ran for, are the diagnostics -- the values are not.
-	for _, want := range []string{`"claim_keys":["email","groups","sub"]`, `"namespace":"/local/dev/drpepper"`} {
+	for _, want := range []string{`"claim_keys":["email","groups","sub"]`, `"namespace":"/tenants/drpepper"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %s in log output:\n%s", want, out)
 		}

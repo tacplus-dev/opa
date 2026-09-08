@@ -156,7 +156,7 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	}
 
 	// namespace: the authorization-tree position the policy assigns to this
-	// caller (e.g. "/local/dev/drpepper"). Kernel sets it as the JWT namespace
+	// caller (e.g. "/tenants/drpepper"). Kernel sets it as the JWT namespace
 	// claim; empty means fall back to the cluster-root namespace. Set it before
 	// any early return so it is carried regardless of the entitlement path.
 	if nsRaw, ok := obj["namespace"]; ok {
