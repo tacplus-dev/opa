@@ -27,6 +27,19 @@ import (
 	userentitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/userentitlements"
 )
 
+// The two entry points this service evaluates. They are compiled into
+// EvalEntitlement and EvalProxyPolicy as literals, so a pushed config that
+// declares anything else would load an evaluator nothing ever looks up --
+// leaving the previously loaded policy quietly in force while the log said
+// "loaded OPA policy". loadPolicy checks the declared entry point against the
+// slot being loaded and refuses the mismatch instead.
+const (
+	// EntitlementsEntryPoint is the rego query EvalEntitlement evaluates.
+	EntitlementsEntryPoint = "data.entitlements.eval"
+	// ProxyPolicyEntryPoint is the rego query EvalProxyPolicy evaluates.
+	ProxyPolicyEntryPoint = "data.proxypolicy.eval"
+)
+
 // Handler implements the service-manager Handler interface for opa.
 // It manages OPA policy evaluators, reloading them when state updates
 // deliver new policy bundles.
@@ -46,12 +59,18 @@ func NewHandler() *Handler {
 // This is used to load policies that the kernel may not yet know about
 // (e.g., fields added to the proto after the kernel image was built).
 // Kernel-provided policies will override this if they are non-nil.
-func (h *Handler) LoadBootstrapPolicy(policy *opaPb.OpaPolicy) {
+// wantEntryPoint is the entry point the slot this policy was read from is
+// evaluated at (EntitlementsEntryPoint or ProxyPolicyEntryPoint); a policy
+// declaring a different one is refused rather than loaded under a name no
+// handler looks up.
+func (h *Handler) LoadBootstrapPolicy(policy *opaPb.OpaPolicy, wantEntryPoint string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if err := h.loadPolicy(policy); err != nil {
-		zap.L().Warn("failed to load bootstrap OPA policy", zap.String("entry_point", policy.GetEntryPoint()), zap.Error(err))
+	if err := h.loadPolicy(policy, wantEntryPoint); err != nil {
+		zap.L().Error("failed to load bootstrap OPA policy", zap.String("entry_point", policy.GetEntryPoint()), zap.Error(err))
+		return err
 	}
+	return nil
 }
 
 // ProxypolicyOpaEvalGrpcImpl returns this handler as the proxypolicy.OpaEval implementation.
@@ -71,7 +90,7 @@ func (h *Handler) ProxypolicyOpaEvalConfig(cfg *pb.Config) error {
 	defer h.mu.Unlock()
 
 	if policy := cfg.GetProxyPolicy(); policy != nil {
-		if err := h.loadPolicy(policy); err != nil {
+		if err := h.loadPolicy(policy, ProxyPolicyEntryPoint); err != nil {
 			return fmt.Errorf("proxy policy: %w", err)
 		}
 	}
@@ -86,7 +105,7 @@ func (h *Handler) UserentitlementsOpaEvalConfig(cfg *pb.Config) error {
 	defer h.mu.Unlock()
 
 	if policy := cfg.GetEntitlementsPolicy(); policy != nil {
-		if err := h.loadPolicy(policy); err != nil {
+		if err := h.loadPolicy(policy, EntitlementsEntryPoint); err != nil {
 			return fmt.Errorf("entitlements policy: %w", err)
 		}
 	}
@@ -107,7 +126,7 @@ func (h *Handler) Shutdown(ctx context.Context) {}
 // "token_entitlements" key of the eval result. Kernel embeds it
 // in the JWT service_entitlements claim without further expansion.
 func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Caller, req *userentitlements_pb.EntitlementEvalInput) (*userentitlements_pb.EntitlementEvalResult, error) {
-	eval, err := h.getEvaluator("data.entitlements.eval")
+	eval, err := h.getEvaluator(EntitlementsEntryPoint)
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "no policy loaded: %v", err)
 	}
@@ -149,10 +168,16 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 
 	resp := &userentitlements_pb.EntitlementEvalResult{}
 
+	// Fail closed, exactly as the sibling EvalProxyPolicy does on the same
+	// situation. A nil/non-object result means the policy is undefined for this
+	// input -- the rule did not match and there is no default. Returning an OK
+	// response with empty grants made that indistinguishable from "this caller
+	// is entitled to nothing", and the response would still carry the namespace/
+	// authorized_projects set below, so a broken evaluation resolved to a real
+	// (possibly broader) scope with no grants rather than to a refusal.
 	obj, ok := result.(map[string]interface{})
 	if !ok {
-		zap.L().Warn("EvalEntitlement: result is not an object, returning empty entitlements")
-		return resp, nil
+		return nil, status.Errorf(codes.Internal, "entitlements policy returned a non-object result (%T) -- policy undefined for this input", result)
 	}
 
 	// namespace: the authorization-tree position the policy assigns to this
@@ -192,8 +217,7 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 				"grants": allEntitlementGrantTokens(),
 			})
 			if err != nil {
-				zap.L().Error("EvalEntitlement: failed to expand all_entitlements", zap.Error(err))
-				return resp, nil
+				return nil, status.Errorf(codes.Internal, "failed to expand all_entitlements: %v", err)
 			}
 			resp.TokenEntitlements = te
 			zap.L().Info("EvalEntitlement: expanded all_entitlements to explicit grants",
@@ -202,17 +226,19 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 		}
 	}
 
+	// A policy that entitles this caller to nothing says so with an empty object
+	// ({"token_entitlements": {}}, which every shipped policy's `default eval`
+	// does). An ABSENT key is a malformed result, not a deliberate empty one, so
+	// it fails closed alongside the unparseable case below rather than minting a
+	// token with no grants.
 	teRaw, ok := obj["token_entitlements"]
 	if !ok {
-		zap.L().Warn("EvalEntitlement: no token_entitlements in result, returning empty entitlements")
-		return resp, nil
+		return nil, status.Errorf(codes.Internal, "entitlements policy result has no token_entitlements field")
 	}
 
 	te, normalizedJSON, err := tokenEntitlementsFromValue(teRaw)
 	if err != nil {
-		zap.L().Warn("EvalEntitlement: failed to unmarshal token_entitlements",
-			zap.Error(err))
-		return resp, nil
+		return nil, status.Errorf(codes.Internal, "malformed token_entitlements: %v", err)
 	}
 
 	resp.TokenEntitlements = te
@@ -261,7 +287,10 @@ func tokenEntitlementsFromValue(raw any) (*entitlements_pb.TokenEntitlements, []
 }
 
 func normalizeTokenEntitlementsJSON(raw any) ([]byte, error) {
-	tokens, dataGrants, azp, principalScope := collectEntitlementTokens(raw)
+	tokens, dataGrants, azp, principalScope, err := collectEntitlementTokens(raw)
+	if err != nil {
+		return nil, err
+	}
 	out := map[string]any{}
 	if tokenEntitlementGrantsAreStrings() {
 		out["grants"] = tokens
@@ -297,103 +326,217 @@ func tokenEntitlementGrantsAreStrings() bool {
 	return fd != nil && fd.Kind() == protoreflect.StringKind
 }
 
-// collectEntitlementTokens flattens whatever shape the policy returned into the
-// four things TokenEntitlements carries: the RPC grant tokens, the data-grant
-// tokens, the azp list, and principal_scope. data_grants is threaded alongside
-// grants (rather than left to the catch-all sweep below, which would otherwise
-// fold its VALUE into the grant list as a grant token nobody ever declared) —
-// exactly the bug that made a policy's data_grants entry land in the JWT's
-// grants claim instead of its own data_grants claim, so a MAY_REDACT field's
-// egress check (which reads data_grants specifically) never saw it.
-func collectEntitlementTokens(raw any) ([]string, []string, []string, string) {
-	tokens := make([]string, 0)
-	dataGrants := make([]string, 0)
-	azp := make([]string, 0)
-	principalScope := ""
-	collectEntitlementTokensInto(raw, &tokens, &dataGrants, &azp, &principalScope)
-	return dedupeStrings(tokens), dedupeStrings(dataGrants), dedupeStrings(azp), principalScope
+// The ONLY keys an entitlement object may carry, and the only keys a grant
+// element in wrapped form may carry. These are allow-lists, deliberately, and
+// they are the whole point of this parser.
+//
+// What was here before handled the five known keys and then swept every OTHER
+// key in the object into the grant list, recursing into nested values as it
+// went. That sweep put a key's VALUE into the JWT grants claim -- a symbol no
+// catalog declares -- and it did so twice for real fields: data_grants landed
+// in grants instead of its own claim (so a MAY_REDACT field's egress check,
+// which reads data_grants specifically, saw none), and principal_scope landed
+// in grants instead of stamping the scope. Each was fixed by adding one more
+// name to the sweep's exclusion list, which fixes that field and nothing else:
+// the NEXT field added to TokenEntitlements reintroduces the bug, and a nested
+// {"meta": {"principal_scope": "PRINCIPAL_SCOPE_ANY"}} slipped through even
+// with both exclusions in place, because nesting was never excluded either.
+//
+// So: enumerate what this code understands and REJECT the rest. Rejecting
+// rather than skipping, for two reasons. It is the same fail-closed posture the
+// rest of this handler now takes -- an entitlement result we cannot fully
+// interpret is an evaluation we should not mint a token from, not one to
+// silently trim. And it is the only behaviour that gives an operator a signal:
+// a skipped field is a log line nobody reads, while a rejected one surfaces at
+// the RPC boundary the moment the policy is pushed. The cost is that adding a
+// field to TokenEntitlements now requires adding it here -- which is exactly
+// the coupling the two previous silent-leak bugs came from NOT having.
+var (
+	entitlementObjectFields = map[string]bool{
+		"grants":          true,
+		"data_grants":     true,
+		"azp":             true,
+		"principal_scope": true,
+	}
+	grantElementFields = map[string]bool{
+		"token": true,
+	}
+)
+
+// collectEntitlementTokens flattens the shape the policy returned into the four
+// things TokenEntitlements carries: the RPC grant tokens, the data-grant
+// tokens, the azp list, and principal_scope. Any key, or any value shape, it
+// does not recognize is an error.
+func collectEntitlementTokens(raw any) ([]string, []string, []string, string, error) {
+	var fields entitlementFields
+	if err := parseEntitlementObject(raw, &fields); err != nil {
+		return nil, nil, nil, "", err
+	}
+	return dedupeStrings(fields.tokens), dedupeStrings(fields.dataGrants), dedupeStrings(fields.azp), fields.principalScope, nil
 }
 
-func collectEntitlementTokensInto(raw any, tokens *[]string, dataGrants *[]string, azp *[]string, principalScope *string) {
+type entitlementFields struct {
+	tokens         []string
+	dataGrants     []string
+	azp            []string
+	principalScope string
+}
+
+func parseEntitlementObject(raw any, out *entitlementFields) error {
+	obj, err := asObject(raw, "token_entitlements")
+	if err != nil {
+		return err
+	}
+	if obj == nil {
+		return nil
+	}
+	if err := rejectUnknownKeys(obj, entitlementObjectFields, "token_entitlements"); err != nil {
+		return err
+	}
+
+	if v, ok := obj["grants"]; ok {
+		if err := parseGrants(v, &out.tokens); err != nil {
+			return err
+		}
+	}
+	if v, ok := obj["data_grants"]; ok {
+		if err := parseStringList(v, "data_grants", &out.dataGrants); err != nil {
+			return err
+		}
+	}
+	if v, ok := obj["azp"]; ok {
+		if err := parseStringList(v, "azp", &out.azp); err != nil {
+			return err
+		}
+	}
+	if v, ok := obj["principal_scope"]; ok && v != nil {
+		scope, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("token_entitlements.principal_scope must be a string, got %T", v)
+		}
+		out.principalScope = scope
+	}
+	return nil
+}
+
+// parseGrants accepts a grant list in either shape the platform has shipped: a
+// flat string list, or a list of {"token": "..."} wrappers (mixed is fine). A
+// wrapper is itself allow-listed, so the nested-object escape the sweep left
+// open is closed at this level too.
+func parseGrants(raw any, out *[]string) error {
 	switch v := raw.(type) {
 	case nil:
-		return
+		return nil
 	case string:
-		if v != "" {
-			*tokens = append(*tokens, v)
-		}
+		appendNonEmpty(out, v)
 	case []string:
 		for _, item := range v {
-			if item != "" {
-				*tokens = append(*tokens, item)
-			}
+			appendNonEmpty(out, item)
 		}
 	case []any:
 		for _, item := range v {
-			collectEntitlementTokensInto(item, tokens, dataGrants, azp, principalScope)
+			if err := parseGrants(item, out); err != nil {
+				return err
+			}
 		}
-	case map[string]string:
-		if token := v["token"]; token != "" {
-			*tokens = append(*tokens, token)
-		}
-	case map[string]any:
-		collectEntitlementObject(v, tokens, dataGrants, azp, principalScope)
-	default:
-		encoded, err := json.Marshal(v)
+	case map[string]any, map[string]string:
+		obj, err := asObject(v, "token_entitlements.grants entry")
 		if err != nil {
-			return
+			return err
 		}
-		var decoded any
-		if err := json.Unmarshal(encoded, &decoded); err == nil {
-			collectEntitlementTokensInto(decoded, tokens, dataGrants, azp, principalScope)
+		if err := rejectUnknownKeys(obj, grantElementFields, "token_entitlements.grants entry"); err != nil {
+			return err
 		}
+		if token, ok := obj["token"]; ok && token != nil {
+			str, ok := token.(string)
+			if !ok {
+				return fmt.Errorf("token_entitlements.grants entry token must be a string, got %T", token)
+			}
+			appendNonEmpty(out, str)
+		}
+	default:
+		return fmt.Errorf("token_entitlements.grants must be a string or a list of grant tokens, got %T", raw)
 	}
+	return nil
 }
 
-func collectEntitlementObject(obj map[string]any, tokens *[]string, dataGrants *[]string, azp *[]string, principalScope *string) {
-	if token, ok := obj["token"].(string); ok && token != "" {
-		*tokens = append(*tokens, token)
-	}
-	if grants, ok := obj["grants"]; ok {
-		collectEntitlementTokensInto(grants, tokens, dataGrants, azp, principalScope)
-	}
-	if dg, ok := obj["data_grants"]; ok {
-		collectStringsInto(dg, dataGrants)
-	}
-	if azpRaw, ok := obj["azp"]; ok {
-		collectStringsInto(azpRaw, azp)
-	}
-	if scope, ok := obj["principal_scope"].(string); ok && scope != "" {
-		*principalScope = scope
-	}
-	keys := make([]string, 0, len(obj))
-	for key := range obj {
-		if key != "token" && key != "grants" && key != "data_grants" && key != "azp" && key != "principal_scope" {
-			keys = append(keys, key)
-		}
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		collectEntitlementTokensInto(obj[key], tokens, dataGrants, azp, principalScope)
-	}
-}
-
-func collectStringsInto(raw any, out *[]string) {
+// parseStringList reads a flat repeated-string field (data_grants, azp),
+// tolerating a bare string for the single-element case.
+func parseStringList(raw any, field string, out *[]string) error {
 	switch v := raw.(type) {
+	case nil:
+		return nil
 	case string:
-		if v != "" {
-			*out = append(*out, v)
-		}
+		appendNonEmpty(out, v)
 	case []string:
 		for _, item := range v {
-			if item != "" {
-				*out = append(*out, item)
-			}
+			appendNonEmpty(out, item)
 		}
 	case []any:
 		for _, item := range v {
-			collectStringsInto(item, out)
+			if item == nil {
+				continue
+			}
+			str, ok := item.(string)
+			if !ok {
+				return fmt.Errorf("token_entitlements.%s entries must be strings, got %T", field, item)
+			}
+			appendNonEmpty(out, str)
 		}
+	default:
+		return fmt.Errorf("token_entitlements.%s must be a string or list of strings, got %T", field, raw)
+	}
+	return nil
+}
+
+// rejectUnknownKeys is the allow-list check itself. It runs at EVERY level an
+// object appears at, not just the top one. Unknown keys are reported sorted so
+// the error an operator sees is stable.
+func rejectUnknownKeys(obj map[string]any, allowed map[string]bool, where string) error {
+	var unknown []string
+	for key := range obj {
+		if !allowed[key] {
+			unknown = append(unknown, key)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	return fmt.Errorf("%s has unrecognized field(s) %v; recognized fields are %v", where, unknown, sortedKeys(allowed))
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// asObject normalizes the object shapes OPA and the internal callers produce.
+// nil (a policy that stamped nothing) is an empty object, not an error.
+func asObject(raw any, where string) (map[string]any, error) {
+	switch v := raw.(type) {
+	case nil:
+		return nil, nil
+	case map[string]any:
+		return v, nil
+	case map[string]string:
+		obj := make(map[string]any, len(v))
+		for k, item := range v {
+			obj[k] = item
+		}
+		return obj, nil
+	default:
+		return nil, fmt.Errorf("%s must be an object, got %T", where, raw)
+	}
+}
+
+func appendNonEmpty(out *[]string, value string) {
+	if value != "" {
+		*out = append(*out, value)
 	}
 }
 
@@ -422,7 +565,7 @@ func dedupeStrings(in []string) []string {
 //   - auth_type: string — credential format ("jwt" or "saml")
 //   - token_use: string or int — token_use claim; must be "TOKEN_USE_EXTERNAL"/6 or unset
 func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Caller, req *proxypolicy_pb.ProxyPolicyEvalInput) (*proxypolicy_pb.ProxyPolicyEvalResult, error) {
-	eval, err := h.getEvaluator("data.proxypolicy.eval")
+	eval, err := h.getEvaluator(ProxyPolicyEntryPoint)
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "no proxy policy loaded: %v", err)
 	}
@@ -517,11 +660,22 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 	return resp, nil
 }
 
-// loadPolicy creates or replaces a PolicyEvaluator for the given policy.
-func (h *Handler) loadPolicy(policy *opaPb.OpaPolicy) error {
+// loadPolicy creates or replaces the PolicyEvaluator for wantEntryPoint.
+//
+// The policy's own declared entry_point must equal wantEntryPoint. A config
+// that declares something else -- a typo, or the OTHER slot's entry point --
+// used to compile fine and be stored under the name it declared, so the
+// evaluator the handler actually looks up was either left untouched (the update
+// silently ignored) or, in the swapped case, replaced by the wrong bundle. Both
+// were reported as "loaded OPA policy". Refusing the load surfaces it to the
+// operator as a config error and leaves the previously loaded policy in force.
+func (h *Handler) loadPolicy(policy *opaPb.OpaPolicy, wantEntryPoint string) error {
 	ep := policy.GetEntryPoint()
 	if ep == "" {
 		return fmt.Errorf("policy missing entry_point")
+	}
+	if ep != wantEntryPoint {
+		return fmt.Errorf("policy declares entry_point %q but this slot is evaluated at %q; refusing the load, the previously loaded policy stays in force", ep, wantEntryPoint)
 	}
 
 	eval, err := NewPolicyEvaluator(policy)

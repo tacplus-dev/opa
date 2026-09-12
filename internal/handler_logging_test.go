@@ -35,7 +35,7 @@ func TestEvalEntitlementDoesNotLogClaimValues(t *testing.T) {
 
 	h := NewHandler()
 	if err := h.loadPolicy(&opaPb.OpaPolicy{
-		EntryPoint: "data.entitlements.eval",
+		EntryPoint: EntitlementsEntryPoint,
 		Bundle: &fsPb.Directory{
 			Files: []*fsPb.File{{
 				Name: "main.rego",
@@ -45,7 +45,7 @@ eval := {"token_entitlements": {"grants": ["ECHO_RPCS_ANY"]}}
 `),
 			}},
 		},
-	}); err != nil {
+	}, EntitlementsEntryPoint); err != nil {
 		t.Fatalf("loadPolicy: %v", err)
 	}
 

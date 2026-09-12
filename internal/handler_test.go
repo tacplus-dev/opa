@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/grants"
@@ -10,13 +11,16 @@ import (
 )
 
 func TestCollectEntitlementTokensAcceptsFlatAndWrappedGrants(t *testing.T) {
-	tokens, _, azp, scope := collectEntitlementTokens(map[string]any{
+	tokens, _, azp, scope, err := collectEntitlementTokens(map[string]any{
 		"grants": []any{
 			"ECHO_RPCS_ANY",
 			map[string]any{"token": "ANTHROPIC_RPCS_ANY"},
 		},
 		"azp": []any{"delegate-a"},
 	})
+	if err != nil {
+		t.Fatalf("collectEntitlementTokens returned error: %v", err)
+	}
 
 	if want := []string{"ECHO_RPCS_ANY", "ANTHROPIC_RPCS_ANY"}; !sameStrings(tokens, want) {
 		t.Fatalf("tokens = %v, want %v", tokens, want)
@@ -35,10 +39,13 @@ func TestCollectEntitlementTokensAcceptsFlatAndWrappedGrants(t *testing.T) {
 // and one that reads as an entitlement rather than as the width of one. Assert
 // both halves: it lands in the scope, and it does NOT land in the grants.
 func TestCollectEntitlementTokensKeepsPrincipalScopeOutOfGrants(t *testing.T) {
-	tokens, _, _, scope := collectEntitlementTokens(map[string]any{
+	tokens, _, _, scope, err := collectEntitlementTokens(map[string]any{
 		"grants":          []any{"ECHO_RPCS_ANY"},
 		"principal_scope": "PRINCIPAL_SCOPE_ANY",
 	})
+	if err != nil {
+		t.Fatalf("collectEntitlementTokens returned error: %v", err)
+	}
 
 	if want := []string{"ECHO_RPCS_ANY"}; !sameStrings(tokens, want) {
 		t.Fatalf("tokens = %v, want %v", tokens, want)
@@ -57,10 +64,13 @@ func TestCollectEntitlementTokensKeepsPrincipalScopeOutOfGrants(t *testing.T) {
 // and never in its own data_grants claim, and every MAY_REDACT field's egress
 // check (which reads data_grants specifically) saw none.
 func TestCollectEntitlementTokensKeepsDataGrantsOutOfGrants(t *testing.T) {
-	tokens, dataGrants, _, _ := collectEntitlementTokens(map[string]any{
+	tokens, dataGrants, _, _, err := collectEntitlementTokens(map[string]any{
 		"grants":      []any{"ECHO_RPCS_ANY"},
 		"data_grants": []any{"ACCOUNTINGRECORD_ACCOUNTING_RECORD_PRINCIPAL_SUB"},
 	})
+	if err != nil {
+		t.Fatalf("collectEntitlementTokens returned error: %v", err)
+	}
 
 	if want := []string{"ECHO_RPCS_ANY"}; !sameStrings(tokens, want) {
 		t.Fatalf("tokens = %v, want %v (data_grants must not leak into grants)", tokens, want)
@@ -158,15 +168,21 @@ func TestTokenEntitlementsFromValueAcceptsFlatGrants(t *testing.T) {
 	}
 }
 
-func TestTokenEntitlementsFromValueAcceptsLegacyServiceMap(t *testing.T) {
-	te, _, err := tokenEntitlementsFromValue(map[string]any{
+// This test used to be TestTokenEntitlementsFromValueAcceptsLegacyServiceMap and
+// asserted that {"echo": ["ECHO_RPCS_ANY"]} produced a grant -- i.e. it asserted
+// the catch-all sweep, which is the finding. That shape is what let data_grants
+// and principal_scope leak into the grants claim, and no shipped policy emits it
+// (every rego bundle in the tree returns grants/data_grants/azp/principal_scope
+// by name). It is now refused along with every other unrecognized key.
+func TestTokenEntitlementsFromValueRejectsLegacyServiceMap(t *testing.T) {
+	_, _, err := tokenEntitlementsFromValue(map[string]any{
 		"echo": []any{"ECHO_RPCS_ANY"},
 	})
-	if err != nil {
-		t.Fatalf("tokenEntitlementsFromValue returned error: %v", err)
+	if err == nil {
+		t.Fatal("tokenEntitlementsFromValue accepted a legacy per-service map; want an error")
 	}
-	if got := firstGrantToken(t, te); got != "ECHO_RPCS_ANY" {
-		t.Fatalf("first grant = %q, want ECHO_RPCS_ANY", got)
+	if !strings.Contains(err.Error(), "echo") {
+		t.Fatalf("error %q does not name the unrecognized field", err)
 	}
 }
 

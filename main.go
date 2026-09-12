@@ -37,13 +37,17 @@ func main() {
 		}
 		if policy := cfg.GetProxyPolicy(); policy != nil {
 			log.Printf("bootstrap: loading proxy_policy (entry_point=%s)", policy.GetEntryPoint())
-			h.LoadBootstrapPolicy(policy)
+			if err := h.LoadBootstrapPolicy(policy, handler.ProxyPolicyEntryPoint); err != nil {
+				log.Printf("bootstrap: proxy_policy not loaded: %v", err)
+			}
 		} else {
 			log.Printf("bootstrap: no proxy_policy in config")
 		}
 		if policy := cfg.GetEntitlementsPolicy(); policy != nil {
 			log.Printf("bootstrap: loading entitlements_policy (entry_point=%s)", policy.GetEntryPoint())
-			h.LoadBootstrapPolicy(policy)
+			if err := h.LoadBootstrapPolicy(policy, handler.EntitlementsEntryPoint); err != nil {
+				log.Printf("bootstrap: entitlements_policy not loaded: %v", err)
+			}
 		}
 	}
 
