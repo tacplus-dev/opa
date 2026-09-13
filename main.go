@@ -16,8 +16,8 @@ func main() {
 	}
 
 	kernelCallers := []string{"kernel", "local/dev/kernel"}
-	sm.Authorizer().SetMethodAuth("EvalEntitlement", kernelCallers)
-	sm.Authorizer().SetMethodAuth("EvalProxyPolicy", kernelCallers)
+	sm.Authorizer().SetMethodAuth("userentitlements.OpaEval/EvalEntitlement", kernelCallers)
+	sm.Authorizer().SetMethodAuth("proxypolicy.OpaEval/EvalProxyPolicy", kernelCallers)
 
 	h := handler.NewHandler()
 
