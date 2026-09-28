@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/grants"
-	entitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/generated/entitlements"
+	"gitlab.com/seabeam/schematic/platform/services/opa/model/grants"
+	entitlements_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/generated/entitlements"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 

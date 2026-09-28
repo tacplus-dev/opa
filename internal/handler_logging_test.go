@@ -10,10 +10,10 @@ import (
 	"go.uber.org/zap/zapcore"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 
-	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/chassis/logger"
-	fsPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/filesystem"
-	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/opalib"
-	userentitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/userentitlements"
+	"gitlab.com/seabeam/schematic/platform/services/opa/model/chassis/logger"
+	fsPb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/filesystem"
+	opaPb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/opalib"
+	userentitlements_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/vservices/userentitlements"
 )
 
 // EvalEntitlement is handed the caller's IDP claims -- sub, email, groups --

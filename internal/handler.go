@@ -14,17 +14,17 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 
-	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/chassis/servicemanager"
-	"gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/grants"
-	proxypolicy_fe "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/s2sm/grpc/servers/vservices/proxypolicy"
-	userentitlements_fe "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/s2sm/grpc/servers/vservices/userentitlements"
-	entitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/generated/entitlements"
-	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/services/opa"
-	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/opalib"
-	token_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/token"
-	x509Pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/x509"
-	proxypolicy_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/proxypolicy"
-	userentitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/userentitlements"
+	"gitlab.com/seabeam/schematic/platform/services/opa/model/chassis/servicemanager"
+	"gitlab.com/seabeam/schematic/platform/services/opa/model/grants"
+	proxypolicy_fe "gitlab.com/seabeam/schematic/platform/services/opa/model/s2sm/grpc/servers/vservices/proxypolicy"
+	userentitlements_fe "gitlab.com/seabeam/schematic/platform/services/opa/model/s2sm/grpc/servers/vservices/userentitlements"
+	entitlements_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/generated/entitlements"
+	pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/services/opa"
+	opaPb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/opalib"
+	token_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/token"
+	x509Pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/x509"
+	proxypolicy_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/vservices/proxypolicy"
+	userentitlements_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/vservices/userentitlements"
 )
 
 // The two entry points this service evaluates. They are compiled into

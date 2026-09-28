@@ -8,10 +8,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/services/opa"
-	fsPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/filesystem"
-	opaPb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/sys/opalib"
-	userentitlements_pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/vservices/userentitlements"
+	pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/services/opa"
+	fsPb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/filesystem"
+	opaPb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/opalib"
+	userentitlements_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/vservices/userentitlements"
 )
 
 // ---------------------------------------------------------------------------

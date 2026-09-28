@@ -1,4 +1,4 @@
-module gitlab.com/secondstarcavalier/schematic/platform/services/opa
+module gitlab.com/seabeam/schematic/platform/services/opa
 
 go 1.25.5
 

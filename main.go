@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	handler "gitlab.com/secondstarcavalier/schematic/platform/services/opa/internal"
-	servicemanager "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/s2sm"
-	pb "gitlab.com/secondstarcavalier/schematic/platform/services/opa/model/types/services/opa"
+	handler "gitlab.com/seabeam/schematic/platform/services/opa/internal"
+	servicemanager "gitlab.com/seabeam/schematic/platform/services/opa/model/s2sm"
+	pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/services/opa"
 )
 
 func main() {
