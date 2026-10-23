@@ -1,4 +1,9 @@
 # Managed by tacplus — do not edit IDs manually.
 registries:
     - https://github.com/tacplus-dev/registry.git
-services: []
+services:
+    - name: opa
+      id: 29
+      tenant_slice_field: 2
+      contract: https://github.com/tacplus-dev/opa.git
+      visibility: private
