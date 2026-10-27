@@ -1,4 +1,5 @@
 language: go
+tacplus: "2.4"
 # pkg kept as copied so the hand-written code keeps compiling; moves with the packages later.
 pkg: com.gitlab.seabeam.schematic.platform.services.opa
 output-dir: model
@@ -6,4 +7,8 @@ src: proto
 header: |
   Copyright (c) 2026 Jody Scott
   SPDX-License-Identifier: Apache-2.0
+# opa serves the eval RPCs for kernel's opa_eval messages (vservices userentitlements
+# and proxypolicy, in kernel's contract), so kernel's proto must be in the run.
+depends:
+  - kernel
 grpc-servers: all

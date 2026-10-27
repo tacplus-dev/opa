@@ -210,9 +210,19 @@ func TestAllEntitlementsUseGeneratedGrantNames(t *testing.T) {
 			t.Errorf("token %q expands to no RPCs -- it grants nothing", token)
 		}
 	}
-	// The wildcard every prod/user role is minted with must be among them.
-	if !containsString(tokens, "STRATUM_ANY") {
-		t.Errorf("allEntitlementGrantTokens() missing STRATUM_ANY: %v", tokens)
+	// And none may be missing: every package in the catalog contributes its
+	// wildcard. This used to name STRATUM_ANY (the wildcard every prod/user role
+	// is minted with), but the catalog is whatever tree opa is generated from:
+	// the whole fleet in a fleet build (grpc-servers: all), only its own
+	// contract and depends in this repository's build since tacplus 2.4, where
+	// stratum is not in the run. Completeness holds in both, and in a fleet
+	// build it still demands STRATUM_ANY.
+	for _, token := range grants.Tokens() {
+		g, _ := grants.Lookup(token)
+		want := strings.ToUpper(g.Package) + "_ANY"
+		if !containsString(tokens, want) {
+			t.Errorf("allEntitlementGrantTokens() missing %s (catalog has %s): %v", want, token, tokens)
+		}
 	}
 }
 
