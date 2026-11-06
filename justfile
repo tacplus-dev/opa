@@ -1,4 +1,5 @@
-# Local development builds only — not used in CI/CD.
+# `generate` is for local development. `gates` is what the nightly scan and every
+# land onto main run (just gates).
 
 TACPLUS := env_var_or_default("TACPLUS_BIN", "tacplus")
 
@@ -11,7 +12,8 @@ generate:
 
 # What every change (ports, releases) must pass: regenerate with the floor's
 # compiler (generated code lives only in model/, so generation touching any
-# file git sees is a failure), then build, vet and test.
+# file git sees is a failure), then build (static, as the release build in
+# .gitlab-ci.yml does), vet and test.
 gates:
   #!/usr/bin/env bash
   set -euo pipefail
@@ -24,7 +26,7 @@ gates:
     git status --porcelain >&2
     exit 1
   fi
-  go build -o bin/opa .
+  CGO_ENABLED=0 go build -trimpath -o bin/opa .
   go vet ./...
   go test ./...
   echo "gates: ok"
