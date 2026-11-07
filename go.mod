@@ -1,4 +1,4 @@
-module gitlab.com/seabeam/schematic/platform/services/opa
+module github.com/tacplus-dev/opa
 
 go 1.26.0
 
