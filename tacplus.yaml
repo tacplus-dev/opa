@@ -1,5 +1,5 @@
 language: go
-tacplus: "2.5"
+tacplus: "2.6"
 # pkg kept as copied so the hand-written code keeps compiling; moves with the packages later.
 pkg: com.gitlab.seabeam.schematic.platform.services.opa
 output-dir: model
