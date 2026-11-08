@@ -14,17 +14,17 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 
-	"gitlab.com/seabeam/schematic/platform/services/opa/model/chassis/servicemanager"
-	"gitlab.com/seabeam/schematic/platform/services/opa/model/grants"
-	proxypolicy_fe "gitlab.com/seabeam/schematic/platform/services/opa/model/s2sm/grpc/servers/vservices/proxypolicy"
-	userentitlements_fe "gitlab.com/seabeam/schematic/platform/services/opa/model/s2sm/grpc/servers/vservices/userentitlements"
-	entitlements_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/generated/entitlements"
-	pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/services/opa"
-	opaPb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/opalib"
-	token_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/token"
-	x509Pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/sys/x509"
-	proxypolicy_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/vservices/proxypolicy"
-	userentitlements_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/vservices/userentitlements"
+	"github.com/tacplus-dev/opa/tacplus/chassis/servicemanager"
+	"github.com/tacplus-dev/opa/tacplus/grants"
+	proxypolicy_fe "github.com/tacplus-dev/opa/tacplus/s2sm/grpc/servers/vservices/proxypolicy"
+	userentitlements_fe "github.com/tacplus-dev/opa/tacplus/s2sm/grpc/servers/vservices/userentitlements"
+	entitlements_pb "github.com/tacplus-dev/opa/tacplus/types/generated/entitlements"
+	pb "github.com/tacplus-dev/opa/tacplus/types/services/opa"
+	opaPb "github.com/tacplus-dev/opa/tacplus/types/sys/opalib"
+	token_pb "github.com/tacplus-dev/opa/tacplus/types/sys/token"
+	x509Pb "github.com/tacplus-dev/opa/tacplus/types/sys/x509"
+	proxypolicy_pb "github.com/tacplus-dev/opa/tacplus/types/vservices/proxypolicy"
+	userentitlements_pb "github.com/tacplus-dev/opa/tacplus/types/vservices/userentitlements"
 )
 
 // The two entry points this service evaluates. They are compiled into

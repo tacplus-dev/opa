@@ -11,3 +11,8 @@ copy runs the launch fleet unchanged; new-design changes land here. Stratum stay
 
 Divergences: headers in tacplus.yaml (Jody Scott, Apache-2.0; LICENSE added); `src: proto` (this repo
 holds the service's own proto); `proto/registry.yaml` is a lock of github.com/tacplus-dev/registry.
+
+2026-11-06 (#3): the module is `github.com/tacplus-dev/opa` (was `gitlab.com/seabeam/schematic/platform/services/opa`),
+its generated package `<module>/tacplus` (`tacplus.yaml` drops the copied `pkg`); SeaBeam's `.gitlab-ci.yml`
+and the `registry:` block of `proto/dependencies.yaml` (its GitLab project id and interface names) are removed;
+the image labels and the proto header name Jody Scott / tacplus.dev.

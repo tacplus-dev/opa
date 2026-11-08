@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.com/seabeam/schematic/platform/services/opa/model/grants"
-	entitlements_pb "gitlab.com/seabeam/schematic/platform/services/opa/model/types/generated/entitlements"
+	"github.com/tacplus-dev/opa/tacplus/grants"
+	entitlements_pb "github.com/tacplus-dev/opa/tacplus/types/generated/entitlements"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 

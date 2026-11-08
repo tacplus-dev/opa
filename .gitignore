@@ -5,7 +5,7 @@ bin/
 *.so
 *.test
 *.out
-model/
+tacplus/
 
 # Build output (tacplus generated-sources tree)
 target/

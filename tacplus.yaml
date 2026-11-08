@@ -1,8 +1,9 @@
 language: go
 tacplus: "2.6"
-# pkg kept as copied so the hand-written code keeps compiling; moves with the packages later.
-pkg: com.gitlab.seabeam.schematic.platform.services.opa
-output-dir: model
+# pkg is derived from go.mod (github.com/tacplus-dev/opa: the org name has a hyphen,
+# which pkg cannot carry). A derived Go package is <module>/tacplus, so the output is "tacplus".
+output-dir: tacplus
+output-name: tacplus
 src: proto
 header: |
   Copyright (c) 2026 Jody Scott
