@@ -8,6 +8,7 @@ Unreleased; tacplus floor 2.4 declared on main (cca8282), gates waiting on the c
 
 ## Next
 - Nothing unblocked: every open issue waits on #1, which waits on tacplus-dev/tacplus#189.
+- Policies evaluate without network built-ins and within the RPC's deadline (#11). Agent, at Jody's request, 2026-11-10.
 
 ## Later
 - Declare the tacplus floor 2.4: gates pass (#1; blocked on tacplus-dev/tacplus#189)
