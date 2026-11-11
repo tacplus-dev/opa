@@ -7,6 +7,7 @@ import (
 
 	"github.com/tacplus-dev/opa/tacplus/grants"
 	entitlements_pb "github.com/tacplus-dev/opa/tacplus/types/generated/entitlements"
+	token_pb "github.com/tacplus-dev/opa/tacplus/types/sys/token"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -267,4 +268,27 @@ func sameStrings(got, want []string) bool {
 		}
 	}
 	return true
+}
+
+func TestParseTokenUseRefusesNumbersOutsideTheEnum(t *testing.T) {
+	for _, tc := range []struct {
+		raw  any
+		want token_pb.TokenUse
+	}{
+		{float64(6), token_pb.TokenUse_TOKEN_USE_EXTERNAL},
+		{int64(6), token_pb.TokenUse_TOKEN_USE_EXTERNAL},
+		{"TOKEN_USE_EXTERNAL", token_pb.TokenUse_TOKEN_USE_EXTERNAL},
+		{"EXTERNAL", token_pb.TokenUse_TOKEN_USE_EXTERNAL},
+		// Truncated to int32, each of these would read as TOKEN_USE_EXTERNAL.
+		{float64(1<<32 + 6), token_pb.TokenUse_TOKEN_USE_UNSPECIFIED},
+		{int64(1<<32 + 6), token_pb.TokenUse_TOKEN_USE_UNSPECIFIED},
+		{float64(6.5), token_pb.TokenUse_TOKEN_USE_UNSPECIFIED},
+		// In int32 range but not a TokenUse.
+		{float64(99), token_pb.TokenUse_TOKEN_USE_UNSPECIFIED},
+		{int64(-1), token_pb.TokenUse_TOKEN_USE_UNSPECIFIED},
+	} {
+		if got := parseTokenUse(tc.raw); got != tc.want {
+			t.Errorf("parseTokenUse(%#v) = %v, want %v", tc.raw, got, tc.want)
+		}
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 
@@ -702,11 +703,25 @@ func parseTokenUse(raw interface{}) token_pb.TokenUse {
 			return tu
 		}
 	case float64:
-		return token_pb.TokenUse(int32(v))
+		if v == math.Trunc(v) && v >= math.MinInt32 && v <= math.MaxInt32 {
+			return tokenUseFromNumber(int64(v))
+		}
 	case int64:
-		return token_pb.TokenUse(int32(v))
+		return tokenUseFromNumber(v)
 	}
 	return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+}
+
+// tokenUseFromNumber returns the TokenUse numbered n, or TOKEN_USE_UNSPECIFIED when no
+// TokenUse has that number: a number outside int32 is refused, never truncated onto one.
+func tokenUseFromNumber(n int64) token_pb.TokenUse {
+	if n < math.MinInt32 || n > math.MaxInt32 {
+		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+	}
+	if _, ok := token_pb.TokenUse_name[int32(n)]; !ok {
+		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+	}
+	return token_pb.TokenUse(n)
 }
 
 // getEvaluator returns the PolicyEvaluator for the given entry_point.
