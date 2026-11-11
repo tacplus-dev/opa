@@ -1,0 +1,145 @@
+= init
+> Bash cd /builds/looper/opa/issues/12; git log --oneline -3 origin/main; git status --short; git diff; gh issue view 13 --repo tacplus-dev/opa --json state,title | head; gh issue view 12 --repo tacplus-dev/opa --comments | tail -20
+< ffb03b2 PROPOSALS.md: the nightly scan's proposals (looper) 0e02c1c ROADMAP: #11 (Jody, 2026-11-10) ac0f175 HISTORY.md: #3 (looper)  M internal/handler.go ?? internal/handler_token_use_test.go diff --git a/internal/handler.go b/internal/handler.go index e69990b..2736913 100644 --- a/internal/handler...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/12; cat internal/handler_token_use_test.go; which go glab; ls; cat justfile | head -60
+< package internal  import ( 	"testing"  	token_pb "github.com/tacplus-dev/opa/tacplus/types/sys/token" )  // A numeric token_use is accepted only when it is an integer in int32 range // and a defined TokenUse value (#12): converting anything else truncated it, // so 2^32 + 6 or 6.5 came out as TOKEN_...
+> Bash cd /builds/looper/opa/issues/12; ls tacplus 2>&1 | head -3; glab api projects/tacplus-dev%2Fbuild/pipelines/3055187585 2>&1 | head -c 600; echo; glab api "projects/tacplus-dev%2Fbuild/pipelines?per_page=8" 2>&1 | head -c 1500
+< ls: cannot access 'tacplus': No such file or directory {"message":"404 Project Not Found"}glab: 404 Project Not Found (HTTP 404)  {"message":"404 Project Not Found"}glab: 404 Project Not Found (HTTP 404)
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/12; git add internal/handler_token_use_test.go && git commit -q -m "test: parseTokenUse must reject out-of-range, fractional and undefined numbers (#12)  int32(v) on an int64 or float64 token_use truncated 2^32 + 6 and 6.5 to TOKEN_USE_EXTERNAL (gosec G115); this test pi...
+< bb251ee parseTokenUse: map a number only if it is an int32 and a defined TokenUse (#12) 74fe580 test: parseTokenUse must reject out-of-range, fractional and undefined numbers (#12) ffb03b2 PROPOSALS.md: the nightly scan's proposals (looper) looper-trace: /builds/looper/opa/issues/12 verdict: pass (0...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/12; /usr/local/bin/repo-looper --repo opa --issue 12 --checkpoint "test 74fe580 + fix bb251ee committed again on main ffb03b2; left: build, land, just gates on main, tag v0.1.3, STATE.md version, close" 2>&1 | tail -3; nohup /usr/local/bin/repo-looper --repo opa --issue ...
+< [2026-11-11T19:04:46Z] checkpoint of #12 (a step) pushed to looper/opa-12:  4 files changed, 267 insertions(+), 2 deletions(-) 887
+= thinking_tokens
+= thinking_tokens
+The fix and test are committed again on main (bb251ee, 74fe580), and a build of them is running. While it runs, I'm looking at STATE.md.
+> Bash cd /builds/looper/opa/issues/12; grep -n -i -E 'version|v0\.1' STATE.md | head; git tag --sort=-v:refname | head -3; ls .github/workflows .gitlab-ci.yml 2>&1; grep -n -i -A5 release CONTRIBUTING* README.md 2>/dev/null | head -20; cat /tmp/build12.log
+< 5:- **Version / line:** v0.1.2 (0.1 line, source tags on green main); tacplus floor 2.6, pinned to 2.6.1 in `tacplus.lock` (#8) 7:- **Released / deployed:** v0.1.0 (2026-11-07), v0.1.1 (#8), v0.1.2 (#3): source tags; binaries, images and the GitHub release come from the build pipeline (tacplus-dev/l...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/12; git log --oneline -6 -- STATE.md; git show v0.1.2 --stat --oneline | head -8; sed -n 1,12p STATE.md
+< 7b01c7c Work without SeaBeam: module github.com/tacplus-dev/opa, no gitlab.com sources (#3) 8d12dd7 tacplus floor 2.6, pinned in tacplus.lock (#8) e53865c Bump grpc and golang.org/x modules past their known vulnerabilities (#4) 136d99b STATE.md, PROPOSALS.md: the gates pass in the looper at floor 2....
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/12; python3 - <<'EOF' p='STATE.md'; s=open(p).read() s=s.replace("Last updated: 2026-11-08 by looper (#3).","Last updated: 2026-11-11 by looper (#12).") s=s.replace("- **Version / line:** v0.1.2 (0.1 line","- **Version / line:** v0.1.3 (0.1 line") s=s.replace("v0.1.2 (#3...
+<  STATE.md | 6 +++---  1 file changed, 3 insertions(+), 3 deletions(-) 319831f STATE.md: v0.1.3, the parseTokenUse fix (#12) [2026-11-11T19:04:51Z] checkpoint of #12 (a build) pushed to looper/opa-12:  4 files changed, 271 insertions(+), 2 deletions(-) [2026-11-11T19:04:51Z] build requested: opa bb25...
+= thinking_tokens
+= thinking_tokens
+The build is under way. Since the last builds hung for hours, I'm queueing the land now too; it runs the full gates itself before merging anything.
+> Bash cd /builds/looper/opa/issues/12; /usr/local/bin/repo-looper --repo opa --issue 12 --checkpoint "74fe580 test, bb251ee fix, 319831f STATE.md v0.1.3; build bb251ee running (pipeline 3055929538), land queued; left: land verdict, just gates on main, tag v0.1.3, comment, close" 2>&1 | tail -1; nohup /usr...
+< [2026-11-11T19:05:07Z] checkpoint of #12 (a step) pushed to looper/opa-12:  5 files changed, 288 insertions(+), 5 deletions(-) 1203
+> ToolSearch {"query":"select:Monitor","max_results":1}
+< 
+> Bash until ! kill -0 887 2>/dev/null || ! kill -0 1203 2>/dev/null; do sleep 20; done; echo BUILD; tail -5 /tmp/build12.log; echo LAND; tail -5 /tmp/land12.log
+= background_tasks_changed
+= task_started
+< Command running in background with ID: bl8iujueu. Output is being written to: /builds/looper/opa/homes/looper-12/tmp/claude-61000/-builds-looper-opa-issues-12/8d736bf1-a7ac-4948-aa4f-c9411e4c7770/tasks/bl8iujueu.output. You will be notified when it completes. To check interim output, use Read on tha...
+The build and the land are both running. I'll be notified as soon as either one finishes.
+> Bash sleep 5; cat /tmp/land12.log
+= task_started
+= task_notification
+< [2026-11-11T19:05:09Z] checkpoint of #12 (land queued) pushed to looper/opa-12:  6 files changed, 293 insertions(+), 5 deletions(-) [2026-11-11T19:05:11Z] queued: the manager of opa merges looper/opa-12 after the lands queued before it, one at a time, and says on the issue what came of it; waiting f...
+Still waiting for either the build or the land to report back.
+= success: Still waiting for either the build or the land to report back.
+= task_updated
+= task_notification
+= background_tasks_changed
+= init
+= thinking_tokens
+= thinking_tokens
+> Bash date -u; kill -0 887 && echo build-running; kill -0 1203 && echo land-running; tail -4 /tmp/build12.log; tail -4 /tmp/land12.log; git -C /builds/looper/opa/issues/12 fetch -q origin; git -C /builds/looper/opa/issues/12 log --oneline -3 origin/main
+< Wed Nov 11 21:05:23 UTC 2026 build-running land-running [2026-11-11T19:04:51Z] checkpoint of #12 (a build) pushed to looper/opa-12:  4 files changed, 271 insertions(+), 2 deletions(-) [2026-11-11T19:04:51Z] build requested: opa bb251ee, the gates full (no gates.yaml) the build job https://gitlab.com...
+= thinking_tokens
+= thinking_tokens
+Neither has reported in two hours: this is the third time a build of this fix has hung. I'll check whether the build service's hangs are already tracked.
+> Bash for r in looper build; do echo "== $r"; gh issue list --repo tacplus-dev/$r --state open --limit 30 --json number,title --jq '.[]|"\(.number) \(.title)"' 2>&1 | head -30; done; gh issue view 12 --repo tacplus-dev/opa --comments --json comments --jq '.comments[-1].body' | head -5
+< == looper 132 Each repository's nightly scan checks STATE.md's Blocked on against the issues' states 131 A land whose only conflict is STATE.md lands its code and sends back only its STATE.md commit 130 A build nobody waits for any more does not run its gates 129 The nightly scan files one issue per...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash end=$(date -d '2026-11-11T22:20:00Z' +%s); until [ $(date +%s) -ge $end ] || ! kill -0 887 2>/dev/null || ! kill -0 1203 2>/dev/null; do sleep 30; done; date -u; echo BUILD; tail -3 /tmp/build12.log; echo LAND; tail -3 /tmp/land12.log
+= background_tasks_changed
+= task_started
+< Command running in background with ID: bq2u27drc. Output is being written to: /builds/looper/opa/homes/looper-12/tmp/claude-61000/-builds-looper-opa-issues-12/8d736bf1-a7ac-4948-aa4f-c9411e4c7770/tasks/bq2u27drc.output. You will be notified when it completes. To check interim output, use Read on tha...
+Still waiting on the build and the land.
+= success: Still waiting on the build and the land.
+= task_updated
+= task_notification
+= background_tasks_changed
+= init
+> Bash cat /builds/looper/opa/homes/looper-12/tmp/claude-61000/-builds-looper-opa-issues-12/8d736bf1-a7ac-4948-aa4f-c9411e4c7770/tasks/bq2u27drc.output; kill -0 887 && echo build-running; kill -0 1203 && echo land-running
+< Wed Nov 11 22:05:42 UTC 2026 BUILD [2026-11-11T19:04:51Z] build requested: opa bb251ee, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3055929538 of opa bb251ee, the gates full on base ffb03b2 no verdict within 3h LAND [2026-11-11T19:05:09Z] checkpoint ...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/12; /usr/local/bin/repo-looper --repo opa --issue 12 --checkpoint "74fe580 test, bb251ee fix, 319831f STATE.md v0.1.3 on main ffb03b2; build 3055929538 no verdict in 3h (looper#113), land queued 19:05Z; left: land verdict, just gates on main, tag v0.1.3, comment, close" ...
+= task_started
+= task_notification
+< [2026-11-11T22:06:01Z] checkpoint of #12 (a step) pushed to looper/opa-12:  6 files changed, 368 insertions(+), 5 deletions(-) https://github.com/tacplus-dev/opa/issues/12#issuecomment-6808174769 Blocked-by: tacplus-dev/looper#113 Blocked-by: tacplus-dev/looper#128
+Issue #12 isn't finished: the fix is written but has never been through a build, because the build service hasn't returned a result for any build of it.
+
+**What's on `looper/opa-12`** (rebased on main `ffb03b2`):
+- `74fe580` adds the test `internal/handler_token_use_test.go`. It covers the cases the issue asks for: 2^32+6 (as int64 and float64), 6.5 and 9999 give `TOKEN_USE_UNSPECIFIED`, and 6 gives `TOKEN_USE_EXTERNAL`.
+- `bb251ee` is the fix in `parseTokenUse`. A float64 is used only if it is a whole number in int32 range. Every number then goes through a new `definedTokenUse`, which checks the range before converting and requires a defined `TokenUse` value; anything else gives `TOKEN_USE_UNSPECIFIED`. This removes the int64 → int32 overflow that gosec flags.
+- `319831f` sets STATE.md's version to v0.1.3.
+
+**Why it stopped:**
+- **Build:** pipeline 3055929538 gave no verdict within 3h. That is the third build of this fix with no result. The cause is a known looper bug, tacplus-dev/looper#113 (builds triggered on tacplus-dev/build never report back).
+- **Land:** queued at 19:05Z and still waiting. The manager turns a land red after 3h of waiting on a build that never starts (tacplus-dev/looper#128).
+- **`just gates`:** not run, since this machine has no container runtime.
+- **Not done yet:** I haven't tagged `v0.1.3` or closed the issue.
+
+I commented this status on the issue and wrote `Blocked-by: tacplus-dev/looper#113` and `Blocked-by: tacplus-dev/looper#128` to the run's outcome file, which ends the run. Once those are fixed, the next run waits for the land's result, runs `just gates` on main, tags `v0.1.3` and closes the issue. If #13 lands first, the test here has to be rebased onto #13's two-valued `parseTokenUse`.
+
+The trace check (rule 13) passes with 0 handlers and 0 findings. The change only touches a parsing helper used by `EvalProxyPolicy`, which makes no outgoing calls.
+= success: Issue #12 isn't finished: the fix is written but has never been through a build, because the build service hasn't returned a result for any build of it.
+
+**What's on `looper/opa-12`** (rebased on main `ffb03b2`):
+- `74fe580` adds the test `internal/handler_token_use_test.go`. It covers the cases the issue asks for: 2^32+6 (as int64 and float64), 6.5 and 9999 give `TOKEN_USE_UNSPECIFIED`, and 6 gives `TOKEN_USE_EXTERNAL`.
+- `bb251ee` is the fix in `parseTokenUse`. A float64 is used only if it is a whole number in int32 range. Every number then goes through a new `definedTokenUse`, which checks the range before converting and requires a defined `TokenUse` value; anything else gives `TOKEN_USE_UNSPECIFIED`. This removes the int64 → int32 overflow that gosec flags.
+- `319831f` sets STATE.md's version to v0.1.3.
+
+**Why it stopped:**
+- **Build:** pipeline 3055929538 gave no verdict within 3h. That is the third build of this fix with no result. The cause is a known looper bug, tacplus-dev/looper#113 (builds triggered on tacplus-dev/build never report back).
+- **Land:** queued at 19:05Z and still waiting. The manager turns a land red after 3h of waiting on a build that never starts (tacplus-dev/looper#128).
+- **`just gates`:** not run, since this machine has no container runtime.
+- **Not done yet:** I haven't tagged `v0.1.3` or closed the issue.
+
+I commented this status on the issue and wrote `Blocked-by: tacplus-dev/looper#113` and `Blocked-by: tacplus-dev/looper#128` to the run's outcome file, which ends the run. Once those are fixed, the next run waits for the land's result, runs `just gates` on main, tags `v0.1.3` and closes the issue. If #13 lands first, the test here has to be rebased onto #13's two-valued `parseTokenUse`.
+
+The trace check (rule 13) passes with 0 handlers and 0 findings. The change only touches a parsing helper used by `EvalProxyPolicy`, which makes no outgoing calls.
