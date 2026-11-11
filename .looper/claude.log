@@ -1,0 +1,115 @@
+= init
+= thinking_tokens
+= thinking_tokens
+> Bash git status && git diff && git log --oneline -3 && gh issue view 14 --repo tacplus-dev/opa --comments | tail -30
+< On branch looper/opa-14 Your branch is up to date with 'origin/main'.  Changes not staged for commit:   (use "git add <file>..." to update what will be committed)   (use "git restore <file>..." to discard changes in working directory) 	modified:   STATE.md 	modified:   tacplus.lock  no changes added...
+= thinking_tokens
+= thinking_tokens
+Two build jobs in a row gave no verdict in 3h. Before retrying, let me see why the pipelines stalled.
+> Bash which glab curl jq; for p in 3053719268 3055912931; do curl -s "https://gitlab.com/api/v4/projects/tacplus-dev%2Fbuild/pipelines/$p" | head -c 600; echo; curl -s "https://gitlab.com/api/v4/projects/tacplus-dev%2Fbuild/pipelines/$p/jobs" | jq -r '.[] | "\(.id) \(.name) \(.status) \(.started_at) \(.fi...
+< /usr/local/bin/glab /usr/bin/curl /usr/bin/jq {"message":"404 Project Not Found"} jq: error (at <stdin>:0): Cannot index string with string "runner" {"message":"404 Project Not Found"} jq: error (at <stdin>:0): Cannot index string with string "runner"
+> Bash for p in 3053719268 3055912931; do glab api "projects/tacplus-dev%2Fbuild/pipelines/$p" 2>&1 | jq -c '{status,created_at,started_at,finished_at,sha,ref}' ; glab api "projects/tacplus-dev%2Fbuild/pipelines/$p/jobs" 2>&1 | jq -r '.[] | "\(.id) \(.name) \(.status) q=\(.queued_duration) start=\(.started...
+< jq: parse error: Invalid numeric literal at line 1, column 40 {"status":null,"created_at":null,"started_at":null,"finished_at":null,"sha":null,"ref":null} jq: error (at <stdin>:1): Cannot index string with string "runner" jq: parse error: Invalid numeric literal at line 1, column 40 jq: parse error:...
+> Bash glab api "projects/tacplus-dev%2Fbuild/pipelines/3055912931" 2>&1 | head -5; glab auth status 2>&1 | head; /usr/local/bin/repo-looper --help 2>&1 | head -40
+< {"message":"404 Project Not Found"}glab: 404 Project Not Found (HTTP 404) gitlab.com   x gitlab.com: API call failed: GET https://gitlab.com/api/v4/user: 401 {message: 401 Unauthorized}   ✓ Git operations for gitlab.com configured to use ssh protocol.   ✓ API calls for gitlab.com are made over https...
+= thinking_tokens
+= thinking_tokens
+No API access to the build pipelines. Let me check whether this is an infrastructure problem known elsewhere.
+> Bash gh search issues "no verdict within 3h" --owner tacplus-dev --json repository,number,title,state,updatedAt --limit 20; gh issue list --repo tacplus-dev/looper --state open --limit 30 --json number,title,labels,updatedAt | jq -r '.[] | "\(.number) \(.updatedAt) \(.title)"'
+< [{"number":25,"repository":{"name":"llmproxy","nameWithOwner":"tacplus-dev/llmproxy"},"state":"open","title":"Release image runs as root: semgrep missing-user-entrypoint (HIGH) on Dockerfile:25 fails the build's security checks","updatedAt":"2026-11-11T19:01:02Z"},{"number":26,"repository":{"name":"...
+= thinking_tokens
+= thinking_tokens
+Looper#113 and #128 look like exactly this failure. Let me read them and see how sibling issues (blobstore#19, tenantecho#11) with the same fix fared.
+> Bash for i in 128 113; do gh issue view $i --repo tacplus-dev/looper --comments | head -60; echo ======; done
+> Bash for r in blobstore/19 tenantecho/11; do gh issue view ${r#*/} --repo tacplus-dev/${r%/*} --comments | tail -40; echo =====; done
+< author:	tacplus-looper association:	none edited:	false status:	none -- The looper of looper starts this issue with its limit 4h capped at 4h by this job (https://gitlab.com/tacplus-dev/looper/-/jobs/17935675784), which ends sooner: the run stops by itself before then, its work checkpointed, and the ...
+< association:	none edited:	false status:	none -- Status at 14:53Z, 2026-11-11. This run ends. The land stays queued, and the issue now waits on tacplus-dev/cluster#18.  - **Committed:** 32297cb on `looper/blobstore-19`, rebased on main 5eef67e. `tacplus.lock` now pins `tacplus: 2.6.8` / `ghcr.io/tacp...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash gh issue view 18 --repo tacplus-dev/cluster --json state,title,updatedAt,labels | jq -c .; gh issue view 18 --repo tacplus-dev/cluster --comments | tail -25; git log origin/main --oneline -3; git ls-remote --tags origin | tail -3
+< {"labels":[{"id":"LA_kwDOVgoRzM8AAAADAvS40g","name":"bug","description":"Something isn't working","color":"d73a4a"},{"id":"LA_kwDOVgoRzM8AAAADAvTAVQ","name":"approved","description":"Approved by someone with write access; the repository's looper works it","color":"0E8A16"},{"id":"LA_kwDOVgoRzM8AAAAD...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash git fetch -q origin looper/opa-14 2>&1; git log --format='%H%n%B' -1 3aadafc 2>/dev/null || git log origin/looper/opa-14 --format='%h %s' -5
+< 3aadafc93d2ae8e2fddcd16159e0f59daac4a96c Pin tacplus 2.6.8: its build image's Go is past GO-2026-6859 (#14)  govulncheck finds GO-2026-6859 (net/http MaxBytesReader header race, fixed in Go 1.26.11 and 1.27.4) reachable from opa. The pinned build:2.6.1 builds with go1.27.3 (/usr/local/go/VERSION in ...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash git add STATE.md tacplus.lock && git commit -q -F <(git log --format=%B -1 3aadafc) && git log --oneline -2 && mkdir -p /tmp/l14 && nohup /usr/local/bin/repo-looper --repo opa --issue 14 --land > /tmp/l14/land.log 2>&1 & echo $! > /tmp/l14/land.pid; sleep 45; cat /tmp/l14/land.log
+= task_started
+= task_notification
+< /bin/bash: line 1: /tmp/l14/land.pid: No such file or directory cf5f94e Pin tacplus 2.6.8: its build image's Go is past GO-2026-6859 (#14) ffb03b2 PROPOSALS.md: the nightly scan's proposals (looper) [2026-11-11T22:05:44Z] checkpoint of #14 (land queued) pushed to looper/opa-14:  5 files changed, 275...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash ps -u "$(id -un)" -o pid,ppid,etime,args | grep -v grep | grep 'repo-looper --repo opa --issue 14 --land'
+<     964       1       00:49 /bin/bash -c source /builds/looper/opa/homes/looper-14/.claude/shell-snapshots/snapshot-bash-1794434700395-aclgra.sh 2>/dev/null || true && shopt -u extglob 2>/dev/null || true && { \builtin unalias -- 'unsetenv'; \builtin unset -f -- 'unsetenv'; } >/dev/null 2>&1 || true...
+= thinking_tokens
+= thinking_tokens
+> Bash /usr/local/bin/looper-trace check 2>&1 | tail -2; /usr/local/bin/repo-looper --repo opa --issue 14 --checkpoint "cf5f94e (pin 2.6.8, go1.27.4; same change as 3aadafc) committed, land re-queued 22:05Z; previous land red only on 'no verdict within 3h' (starved build pool, looper#113/#128, cluster#18)....
+= task_started
+= task_notification
+< looper-trace: /builds/looper/opa/issues/14 verdict: pass (0 handlers, 0 findings) [2026-11-11T22:06:39Z] checkpoint of #14 (a step) pushed to looper/opa-14:  5 files changed, 301 insertions(+), 6 deletions(-)
+> Bash gh issue comment 14 --repo tacplus-dev/opa --body-file - <<'EOF' Status at 22:07Z, 2026-11-11. This run ends. The land is queued again, and the issue now waits on tacplus-dev/cluster#18.  - **Committed:** cf5f94e on `looper/opa-14`, rebased on main ffb03b2. It is the same change as 3aadafc. `tacplus...
+< https://github.com/tacplus-dev/opa/issues/14#issuecomment-6808189332 stopped [2026-11-11T22:05:44Z] checkpoint of #14 (land queued) pushed to looper/opa-14:  5 files changed, 275 insertions(+), 6 deletions(-) [2026-11-11T22:05:47Z] queued: the manager of opa merges looper/opa-14 after the lands queu...
+> Bash echo 'Blocked-by: tacplus-dev/cluster#18' > /builds/tacplus-dev/looper/looper-runs/20261111T220442Z-issue-14/outcome && cat /builds/tacplus-dev/looper/looper-runs/20261111T220442Z-issue-14/outcome
+< Blocked-by: tacplus-dev/cluster#18
+Issue #14 is not finished: the fix is queued to land again, but nothing is merged, tagged or closed, and it now waits on tacplus-dev/cluster#18.
+
+- **The fix:** cf5f94e moves `tacplus.lock` from tacplus 2.6.1 to 2.6.8 and updates STATE.md. It is the same change as the previous run's 3aadafc. Its build image has go1.27.4, which fixes GO-2026-6859; 2.6.1's image has go1.27.3, which is affected. The previous run got these versions by reading the Go version file in each image in the registry, since there is no docker here.
+- **Why the last land failed:** no test failed. Both build jobs for this change (the `--build` and the manager's land) were never picked up and timed out after 3h with "no verdict within 3h". Every build job across tacplus-dev since about 05:00Z has failed the same way. The build pool has no runner taking jobs; that is tracked in tacplus-dev/looper#113 and #128, caused by tacplus-dev/cluster#18, which is still open. blobstore#19 and tenantecho#11, which make the same pin move, were stopped by the same thing.
+- **What I did:** committed the change again, queued the land at 22:05Z, saved a checkpoint, and posted a status comment on #14. I did not start another `--build`, because it would only add one more job to the stuck queue. I stopped my own process waiting on the land; that does not cancel the land, which the manager still runs after this run ends. I wrote `Blocked-by: tacplus-dev/cluster#18` to the run's outcome file, which ends the run.
+- **Not checked yet:** `just gates` on the 2.6.8 pin, and `govulncheck ./...` inside the build:2.6.8 image. Both need a build job that actually runs.
+- **Left for the next run:** if the queued land comes back green, run `just gates` on main, tag `v0.1.3` there and push it, write the outcome comment, and close #14. main has only planning-file commits since v0.1.2 and there are no `release/*` branches, so nothing needs backporting.
+- **Trace rule:** `looper-trace check` found no handlers and no findings, and this change touches none.
+= success: Issue #14 is not finished: the fix is queued to land again, but nothing is merged, tagged or closed, and it now waits on tacplus-dev/cluster#18.
+
+- **The fix:** cf5f94e moves `tacplus.lock` from tacplus 2.6.1 to 2.6.8 and updates STATE.md. It is the same change as the previous run's 3aadafc. Its build image has go1.27.4, which fixes GO-2026-6859; 2.6.1's image has go1.27.3, which is affected. The previous run got these versions by reading the Go version file in each image in the registry, since there is no docker here.
+- **Why the last land failed:** no test failed. Both build jobs for this change (the `--build` and the manager's land) were never picked up and timed out after 3h with "no verdict within 3h". Every build job across tacplus-dev since about 05:00Z has failed the same way. The build pool has no runner taking jobs; that is tracked in tacplus-dev/looper#113 and #128, caused by tacplus-dev/cluster#18, which is still open. blobstore#19 and tenantecho#11, which make the same pin move, were stopped by the same thing.
+- **What I did:** committed the change again, queued the land at 22:05Z, saved a checkpoint, and posted a status comment on #14. I did not start another `--build`, because it would only add one more job to the stuck queue. I stopped my own process waiting on the land; that does not cancel the land, which the manager still runs after this run ends. I wrote `Blocked-by: tacplus-dev/cluster#18` to the run's outcome file, which ends the run.
+- **Not checked yet:** `just gates` on the 2.6.8 pin, and `govulncheck ./...` inside the build:2.6.8 image. Both need a build job that actually runs.
+- **Left for the next run:** if the queued land comes back green, run `just gates` on main, tag `v0.1.3` there and push it, write the outcome comment, and close #14. main has only planning-file commits since v0.1.2 and there are no `release/*` branches, so nothing needs backporting.
+- **Trace rule:** `looper-trace check` found no handlers and no findings, and this change touches none.
