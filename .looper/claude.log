@@ -1,0 +1,217 @@
+= init
+> Bash gh issue view 10 --repo tacplus-dev/opa --comments; git status; git log --oneline -3; git diff --stat
+< author:	jodydadescott association:	member edited:	false status:	none -- Hub triage, 2026-11-08: **approved, priority high** (security; it fails the release image's build). Same fix as blobstore#18: a fixed non-root USER (UID/GID 65532), with writable paths owned by it. -- author:	tacplus-looper asso...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash gh issue view 10 --repo tacplus-dev/opa --json title,body,author,labels; git diff; cat justfile; ls
+< {"author":{"is_bot":true,"login":"app/tacplus-looper"},"body":"## What\nsemgrep 1.183.0 with `p/default` (the ruleset `looper-scan local` runs) reports `dockerfile.security.missing-user-entrypoint` (HIGH, blocking) on main's `Dockerfile:30` (`ENTRYPOINT [\"launcher\"]`): the Dockerfile has no `USER`...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cat Dockerfile.cross; cat Dockerfile | head -30; git log --format='%h %ci %s' -8 origin/main
+< FROM gcr.io/distroless/static:nonroot COPY bin/opa /opa ENTRYPOINT ["/opa"] # Uncle OPA Release Image # Layers the opa binary onto a minimal Alpine base.  # The base is a build argument: a fleet may hand in its own hardened base, the # default is the public one (no private registry in a public contr...
+> Bash (which semgrep && semgrep --version && semgrep --config p/default --metrics=off Dockerfile Dockerfile.cross 2>&1 | tail -15); /usr/local/bin/looper-trace check 2>&1 | tail -5
+= task_started
+= task_notification
+< /usr/local/bin/semgrep 1.183.0                  ┌──────────────┐ │ Scan Summary │ └──────────────┘ ✅ Scan completed successfully.  • Findings: 0 (0 blocking)  • Rules run: 53  • Targets scanned: 2  • Parsed lines: ~100.0%  • No ignore information available Ran 53 rules on 2 files: 0 findings. (need ...
+Also check the gate's shell line works locally, then commit.
+> Bash user="$(grep -E '^USER[[:space:]]' Dockerfile | tail -n 1 | awk '{print $2}')"; echo "[$user]"; git show origin/main:Dockerfile > /tmp/df10 && u2="$(grep -E '^USER[[:space:]]' /tmp/df10 | tail -n 1 | awk '{print $2}')"; echo "old:[$u2]"; sed -i 's/by looper (#10)/by looper (#10)/' STATE.md; git add ...
+< [65532:65532] old:[] 679bfd6 Release image runs as the fixed non-root 65532:65532 (#10)
+= thinking_tokens
+= thinking_tokens
+> Bash sed -i "s/user=\"\$(grep -E '^USER\[\[:space:\]\]' Dockerfile | tail -n 1/user=\"\$({ grep -E '^USER[[:space:]]' Dockerfile || true; } | tail -n 1/" justfile && grep -n 'user=' justfile && bash -c 'set -euo pipefail; user="$({ grep -E "^USER[[:space:]]" /tmp/df10 || true; } | tail -n 1 | awk "{print...
+< 27:  user="$({ grep -E '^USER[[:space:]]' Dockerfile || true; } | tail -n 1 | awk '{print $2}')" fails with message: [] 8fdb703 Release image runs as the fixed non-root 65532:65532 (#10)
+> Bash /usr/local/bin/repo-looper --repo opa --issue 10 --checkpoint "Done: fix 8fdb703 (Dockerfile user/group opa 65532, USER 65532:65532 before ENTRYPOINT; just gates checks the last USER, with a message when none; STATE.md). semgrep p/default 0 findings; looper-trace pass, 0 handlers. Previous two lands...
+< [2026-11-11T02:01:33Z] checkpoint of #10 (a step) pushed to looper/opa-10:  5 files changed, 150 insertions(+), 1 deletion(-) 840
+= thinking_tokens
+= thinking_tokens
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null; do sleep 30; done'; cat /tmp/build10.log
+= task_started
+= task_notification
+< [2026-11-11T02:01:35Z] checkpoint of #10 (a build) pushed to looper/opa-10:  5 files changed, 151 insertions(+), 1 deletion(-) [2026-11-11T02:01:35Z] build requested: opa 8fdb703, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703,...
+= thinking_tokens
+= thinking_tokens
+> Bash which glab; curl -s https://gitlab.com/api/v4/projects/tacplus-dev%2Fbuild/pipelines/3052481744 | head -c 600; echo; curl -s "https://gitlab.com/api/v4/projects/tacplus-dev%2Fbuild/pipelines/3052481744/jobs" | python3 -I -c 'import json,sys; [print(j["name"],j["status"],j.get("started_at"),j.get("ru...
+< Exit code 1 /usr/local/bin/glab {"message":"404 Project Not Found"} Traceback (most recent call last):   File "<string>", line 1, in <module>     import json,sys; [print(j["name"],j["status"],j.get("started_at"),j.get("runner") and j["runner"].get("description")) for j in json.load(sys.stdin)]      ...
+> Bash glab api projects/tacplus-dev%2Fbuild/pipelines/3052481744/jobs 2>&1 | python3 -I -c 'import json,sys; d=json.load(sys.stdin); [print(j["name"],j["status"],j.get("created_at"),j.get("started_at")) for j in d]' 2>&1 | head; glab api "projects/tacplus-dev%2Fbuild/pipelines?per_page=10" 2>&1 | python3 ...
+< Traceback (most recent call last):   File "<string>", line 1, in <module>     import json,sys; d=json.load(sys.stdin); [print(j["name"],j["status"],j.get("created_at"),j.get("started_at")) for j in d]                        ~~~~~~~~~^^^^^^^^^^^   File "/usr/lib/python3.13/json/__init__.py", line 293...
+I've committed the fix as 8fdb703 and started a build job, and I'm waiting for its result. I tried to check the GitLab pipeline directly, but I can't see it from here.
+> Bash glab api projects/tacplus-dev%2Fbuild/pipelines/3052481744 2>&1 | head -c 400
+< {"message":"404 Project Not Found"}glab: 404 Project Not Found (HTTP 404)
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null; do sleep 30; done'; tail -5 /tmp/build10.log
+= task_started
+= task_notification
+< [2026-11-11T02:01:35Z] checkpoint of #10 (a build) pushed to looper/opa-10:  5 files changed, 151 insertions(+), 1 deletion(-) [2026-11-11T02:01:35Z] build requested: opa 8fdb703, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703,...
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null; do sleep 30; done'; tail -3 /tmp/build10.log; date -u
+= task_started
+= task_notification
+< [2026-11-11T02:01:35Z] checkpoint of #10 (a build) pushed to looper/opa-10:  5 files changed, 151 insertions(+), 1 deletion(-) [2026-11-11T02:01:35Z] build requested: opa 8fdb703, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703,...
+= thinking_tokens
+= thinking_tokens
+> Bash /usr/local/bin/repo-looper --help 2>&1 | head -40
+< repo-looper: the looper of one tacplus-dev repository. It runs in the looper container, as jobs of the GitLab looper pipeline, and only while the repository has work: a job per issue, its report, and a manager per repository, which alone merges to its main (looper#70).    repo-looper --repo NAME --i...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash nohup /usr/local/bin/repo-looper --repo opa --issue 10 --land > /tmp/land10.log 2>&1 & echo $!; sleep 20; cat /tmp/land10.log
+= task_started
+= task_notification
+< 5401 [2026-11-11T02:31:34Z] checkpoint of #10 (land queued) pushed to looper/opa-10:  6 files changed, 188 insertions(+), 1 deletion(-) [2026-11-11T02:31:36Z] queued: the manager of opa merges looper/opa-10 after the lands queued before it, one at a time, and says on the issue what came of it; waiti...
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -2 /tmp/build10.log; tail -2 /tmp/land10.log
+= task_started
+= task_notification
+< [2026-11-11T02:01:35Z] build requested: opa 8fdb703, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c [2026-11-11T02:31:34Z] checkpoint of #10 (land queued) pushed to looper/opa-10:  6 files change...
+I'm still waiting on two things: the build job I started at 02:01Z, and the land I queued with the manager at 02:31Z. Neither has a result yet, so I'm checking every ten minutes.
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; date -u
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c [2026-11-11T02:31:36Z] queued: the manager of opa merges looper/opa-10 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verd...
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; date -u
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; date -u
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; date -u
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c [2026-11-11T02:31:36Z] queued: the manager of opa merges looper/opa-10 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verd...
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c [2026-11-11T02:31:36Z] queued: the manager of opa merges looper/opa-10 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verd...
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c [2026-11-11T02:31:36Z] queued: the manager of opa merges looper/opa-10 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verd...
+= thinking_tokens
+= thinking_tokens
+> Bash gh search issues --owner tacplus-dev "no verdict within" --state open --limit 10 2>&1 | head; gh search issues --owner tacplus-dev "build job stall" --limit 10 2>&1 | head
+< tacplus-dev/llmproxy	25	open	Release image runs as root: semgrep missing-user-entrypoint (HIGH) on Dockerfile:25 fails the build's security checks	bug, approved, looper:in-progress, priority:high, looper:landing	2026-11-11T02:03:09Z tacplus-dev/gateway	29	open	Release image runs as root: semgrep mis...
+= thinking_tokens
+= thinking_tokens
+> Bash gh issue view 113 --repo tacplus-dev/looper --comments 2>&1 | head -80
+< author:	jodydadescott association:	member edited:	false status:	none -- Hub triage, 2026-11-09: approved, priority high. Build jobs are #84's gate path, and a build that never reports blocks every pinned repo's land. Have the build pipeline post its commit status (pending at start, then the result) ...
+= thinking_tokens
+= thinking_tokens
+> Bash gh api repos/tacplus-dev/opa/commits/8fdb703/statuses --jq '.[] | "\(.state) \(.created_at) \(.context) \(.target_url)"' 2>&1 | head; gh api repos/tacplus-dev/opa/commits/91deca5/statuses --jq '.[] | "\(.state) \(.created_at) \(.target_url)"' 2>&1 | head -3
+< pending 2026-11-11T02:22:21Z tacplus-dev/build https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 pending 2026-11-10T13:49:34Z https://gitlab.com/tacplus-dev/build/-/pipelines/3049906988
+= thinking_tokens
+= thinking_tokens
+The build pipeline began at 02:22Z (its status is "pending"), so a runner is working on it. I'll keep waiting.
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; gh api repos/tacplus-dev/opa/commits/8fdb703/statuses --jq '.[0].state'; date -u
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; gh api repos/tacplus-dev/opa/commits/8fdb703/statuses --jq '.[0].state'; date -u
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c [2026-11-11T02:31:36Z] queued: the manager of opa merges looper/opa-10 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verd...
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c [2026-11-11T02:31:36Z] queued: the manager of opa merges looper/opa-10 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verd...
+= thinking_tokens
+= thinking_tokens
+> Bash for c in 0e02c1c 7b01c7c 8d12dd7; do echo "$c: $(gh api repos/tacplus-dev/opa/commits/$c/statuses --jq '[.[]|"\(.state) \(.created_at)"]|join(", ")')"; done; gh issue view 113 --repo tacplus-dev/looper --comments 2>&1 | tail -30
+< 0e02c1c:  7b01c7c:  8d12dd7:  status:	none -- Data point, 2026-11-10 23:16Z: this run's own build https://gitlab.com/tacplus-dev/build/-/pipelines/3051935520 (looper 0b727ad, requested 22:27Z) has set no `tacplus-dev/build` status on 0b727ad in 49 minutes, not even pending: no runner has taken its f...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; gh api repos/tacplus-dev/opa/commits/8fdb703/statuses --jq '.[0].state'; date -u
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; gh api repos/tacplus-dev/opa/commits/8fdb703/statuses --jq '.[0].state'; date -u
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; gh api repos/tacplus-dev/opa/commits/8fdb703/statuses --jq '.[0].state'; date -u
+= task_started
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -1 /tmp/build10.log; tail -1 /tmp/land10.log; gh api repos/tacplus-dev/opa/commits/8fdb703/statuses --jq '.[0].state'; date -u
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c jq: error (at <stdin>:5): object ({"message":...) and string ("<!-- loope...) cannot have their containment checked { 	"message": "API rate limit exceeded for installation ID 1790...
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c jq: error (at <stdin>:5): object ({"message":...) and string ("<!-- loope...) cannot have their containment checked pending Wed Nov 11 04:01:04 UTC 2026
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c jq: error (at <stdin>:5): object ({"message":...) and string ("<!-- loope...) cannot have their containment checked pending Wed Nov 11 04:10:54 UTC 2026
+= task_started
+= task_notification
+< the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c jq: error (at <stdin>:5): object ({"message":...) and string ("<!-- loope...) cannot have their containment checked pending Wed Nov 11 04:20:44 UTC 2026
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -2 /tmp/build10.log; tail -2 /tmp/land10.log; date -u
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -2 /tmp/build10.log; tail -2 /tmp/land10.log; date -u
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -2 /tmp/build10.log; tail -2 /tmp/land10.log; date -u
+= task_started
+> Bash timeout 590 bash -c 'while kill -0 840 2>/dev/null && kill -0 5401 2>/dev/null; do sleep 30; done'; tail -2 /tmp/build10.log; tail -2 /tmp/land10.log; date -u
+= task_notification
+< [2026-11-11T02:01:35Z] build requested: opa 8fdb703, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c jq: error (at <stdin>:5): object ({"message":...) and string ("<!-- loope...) cannot have their...
+= task_started
+= task_notification
+< [2026-11-11T02:01:35Z] build requested: opa 8fdb703, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c jq: error (at <stdin>:5): object ({"message":...) and string ("<!-- loope...) cannot have their...
+= task_started
+= task_notification
+< [2026-11-11T02:01:35Z] build requested: opa 8fdb703, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c jq: error (at <stdin>:5): object ({"message":...) and string ("<!-- loope...) cannot have their...
+= task_started
+= task_notification
+< [2026-11-11T02:01:35Z] build requested: opa 8fdb703, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3052481744 of opa 8fdb703, the gates full on base 0e02c1c jq: error (at <stdin>:5): object ({"message":...) and string ("<!-- loope...) cannot have their...
+= thinking_tokens
+= thinking_tokens
+It's 05:00Z, so about 50 minutes remain. I'm wrapping up: a status comment, a checkpoint, and the blocker on tacplus-dev/looper#113.
+> Bash gh api rate_limit --jq .resources.core; gh api repos/tacplus-dev/opa/commits/8fdb703/statuses --jq '.[] | "\(.state) \(.updated_at)"' | head -3; kill -0 5401 && echo land-waiter-alive
+< {"limit":5600,"remaining":5355,"reset":1794376696,"used":245} pending 2026-11-11T02:22:21Z land-waiter-alive
+> Bash cat > /tmp/c10.md <<'EOF' Status at 05:0xZ, 2026-11-11 (this run's time is nearly out; the issue stays open, waiting on tacplus-dev/looper#113):  - **Fix, committed:** 8fdb703 on `looper/opa-10`. The Dockerfile adds group and user `opa` with fixed IDs 65532 (`addgroup -S -g 65532`, `adduser -S -D -H...
+< https://github.com/tacplus-dev/opa/issues/10#issuecomment-6787484501
+> Bash /usr/local/bin/repo-looper --repo opa --issue 10 --checkpoint "Done: fix 8fdb703 (Dockerfile user/group opa 65532, USER 65532:65532 before ENTRYPOINT; just gates checks last USER; STATE.md); semgrep p/default 0 findings; looper-trace pass. Land queued 02:31Z; build 3052481744 pending since 02:22Z, s...
+< [2026-11-11T05:00:33Z] checkpoint of #10 (a step) pushed to looper/opa-10:  6 files changed, 303 insertions(+), 1 deletion(-) Blocked-by: tacplus-dev/looper#113
+I've committed the fix and queued it to land, but it isn't on main yet. That's because build jobs aren't getting runners, a known open infrastructure bug, so issue #10 stays open and I've marked it blocked on tacplus-dev/looper#113.
+
+**The fix (commit 8fdb703 on `looper/opa-10`):**
+- **Dockerfile:** adds group and user `opa` with the fixed ID 65532 and ends with `USER 65532:65532` just before `ENTRYPOINT`. opa writes nothing inside its container, so no directory needs its owner changed.
+- **justfile:** `just gates` now fails, with a message, unless the Dockerfile's last `USER` is `65532:65532`. I fixed one case from the previous run's version: a Dockerfile with no `USER` at all made the gate exit without saying why.
+- **STATE.md:** updated to say the image runs unprivileged.
+
+**What I checked here:**
+- semgrep 1.183.0 with `p/default` on both Dockerfiles: 0 findings. Main's Dockerfile still has the `missing-user-entrypoint` finding.
+- The new gate line passes on the new Dockerfile and fails on main's.
+- `looper-trace check`: pass, 0 handlers. No service handler is touched, so the trace rule doesn't apply.
+
+**Not verified:**
+- **Full gates:** `just gates` has not run in the build image. Build job 3052481744 has shown "pending" since 02:22Z with no verdict. The two previous lands also came back red only because their builds got no verdict within 3h; no gate actually failed.
+- **Image start:** I couldn't check that the image still starts as 65532, because there is no container runtime here.
+
+**What happens next:**
+- **Land:** queued with the manager at 02:31Z, which can still merge it after this run ends.
+- **Issue comment:** I posted the full status on #10.
+- **Checkpoint and blocker:** the checkpoint is pushed to `looper/opa-10`, and the outcome file names `Blocked-by: tacplus-dev/looper#113`.
+- **Next run:** once 8fdb703 is on main and the full gates pass there, it tags `v0.1.3`, posts the outcome comment and closes #10. There are no `release/` branches, so there is nothing to backport.
+= success: I've committed the fix and queued it to land, but it isn't on main yet. That's because build jobs aren't getting runners, a known open infrastructure bug, so issue #10 stays open and I've marked it blocked on tacplus-dev/looper#113.
+
+**The fix (commit 8fdb703 on `looper/opa-10`):**
+- **Dockerfile:** adds group and user `opa` with the fixed ID 65532 and ends with `USER 65532:65532` just before `ENTRYPOINT`. opa writes nothing inside its container, so no directory needs its owner changed.
+- **justfile:** `just gates` now fails, with a message, unless the Dockerfile's last `USER` is `65532:65532`. I fixed one case from the previous run's version: a Dockerfile with no `USER` at all made the gate exit without saying why.
+- **STATE.md:** updated to say the image runs unprivileged.
+
+**What I checked here:**
+- semgrep 1.183.0 with `p/default` on both Dockerfiles: 0 findings. Main's Dockerfile still has the `missing-user-entrypoint` finding.
+- The new gate line passes on the new Dockerfile and fails on main's.
+- `looper-trace check`: pass, 0 handlers. No service handler is touched, so the trace rule doesn't apply.
+
+**Not verified:**
+- **Full gates:** `just gates` has not run in the build image. Build job 3052481744 has shown "pending" since 02:22Z with no verdict. The two previous lands also came back red only because their builds got no verdict within 3h; no gate actually failed.
+- **Image start:** I couldn't check that the image still starts as 65532, because there is no container runtime here.
+
+**What happens next:**
+- **Land:** queued with the manager at 02:31Z, which can still merge it after this run ends.
+- **Issue comment:** I posted the full status on #10.
+- **Checkpoint and blocker:** the checkpoint is pushed to `looper/opa-10`, and the outcome file names `Blocked-by: tacplus-dev/looper#113`.
+- **Next run:** once 8fdb703 is on main and the full gates pass there, it tags `v0.1.3`, posts the outcome comment and closes #10. There are no `release/` branches, so there is nothing to backport.
