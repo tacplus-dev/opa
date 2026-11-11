@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 
@@ -702,11 +703,28 @@ func parseTokenUse(raw interface{}) token_pb.TokenUse {
 			return tu
 		}
 	case float64:
-		return token_pb.TokenUse(int32(v))
+		// Only an integral value in int32 range: a plain conversion truncated
+		// 6.5 and wrapped 2^32 + 6 to TOKEN_USE_EXTERNAL (#12).
+		if v >= math.MinInt32 && v <= math.MaxInt32 && v == math.Trunc(v) {
+			return definedTokenUse(int64(v))
+		}
 	case int64:
-		return token_pb.TokenUse(int32(v))
+		return definedTokenUse(v)
 	}
 	return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+}
+
+// definedTokenUse returns n as a TokenUse when it is in int32 range and a
+// defined enum value, TOKEN_USE_UNSPECIFIED otherwise.
+func definedTokenUse(n int64) token_pb.TokenUse {
+	if n < math.MinInt32 || n > math.MaxInt32 {
+		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+	}
+	n32 := int32(n)
+	if _, ok := token_pb.TokenUse_name[n32]; !ok {
+		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+	}
+	return token_pb.TokenUse(n32)
 }
 
 // getEvaluator returns the PolicyEvaluator for the given entry_point.
