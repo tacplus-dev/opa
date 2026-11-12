@@ -1,0 +1,249 @@
+= init
+= thinking_tokens
+= thinking_tokens
+> Bash git status --short && git log --oneline -3 && git diff --stat && gh issue view 13 --repo tacplus-dev/opa --comments | tail -20 && gh issue view 12 --repo tacplus-dev/opa --json state,title
+<  M STATE.md  M internal/handler.go ?? internal/handler_proxy_token_use_test.go ffb03b2 PROPOSALS.md: the nightly scan's proposals (looper) 0e02c1c ROADMAP: #11 (Jody, 2026-11-10) ac0f175 HISTORY.md: #3 (looper)  STATE.md            |  6 +++---  internal/handler.go | 56 ++++++++++++++++++++++++++++++...
+> Bash git diff && cat internal/handler_proxy_token_use_test.go && cat justfile | head -60
+< diff --git a/STATE.md b/STATE.md index 4744c80..a8158d8 100644 --- a/STATE.md +++ b/STATE.md @@ -1,10 +1,10 @@  # State: opa   -Overwritten to stay current (loopers and agents). Last updated: 2026-11-08 by looper (#3). +Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by lo...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Grep parseTokenUse\(
+< internal/handler.go:638:		tokenUse, err := parseTokenUse(tokenUseRaw) internal/handler.go:703:func parseTokenUse(raw interface{}) (token_pb.TokenUse, error) { internal/handler_proxy_token_use_test.go:126:		got, err := parseTokenUse(tc.raw) internal/handler_proxy_token_use_test.go:129:			t.Errorf("%s...
+= thinking_tokens
+= thinking_tokens
+> Bash gofmt -l internal/ ; grep -rn "token_use\|TokenUse" internal/*_test.go | grep -v handler_proxy_token_use_test | head; sed -i 's/Last updated: 2026-11-11 by looper (#13)/Last updated: 2026-11-12 by looper (#13)/' STATE.md; /usr/local/bin/looper-trace check 2>&1 | tail -5
+< looper-trace: /builds/looper/opa/issues/13 verdict: pass (0 handlers, 0 findings)
+Commit and run the build job.
+> Bash git add -A && git commit -q -F - <<'EOF' parseTokenUse: honour OPA's json.Number, fail on an unrecognised token_use (#13)  OPA's rego results carry numbers as json.Number, which parseTokenUse did not handle: a policy returning the documented integer form (token_use: 6) silently minted TOKEN_USE_UNSP...
+< 42b42cf parseTokenUse: honour OPA's json.Number, fail on an unrecognised token_use (#13) 731
+> ToolSearch {"query":"select:Monitor","max_results":1}
+< 
+> Bash until ! kill -0 731 2>/dev/null; do sleep 20; done; tail -30 /tmp/build13.log
+= background_tasks_changed
+= task_started
+< Command running in background with ID: bkdvuupcr. Output is being written to: /builds/looper/opa/homes/looper-13/tmp/claude-61000/-builds-looper-opa-issues-13/05832f6f-8a23-44ba-9599-7ed8567f2159/tasks/bkdvuupcr.output. You will be notified when it completes. To check interim output, use Read on tha...
+> Bash sleep 5; cat /tmp/build13.log
+= task_started
+= task_notification
+< [2026-11-12T11:35:59Z] checkpoint of #13 (a build) pushed to looper/opa-13:  5 files changed, 396 insertions(+), 13 deletions(-) [2026-11-12T11:35:59Z] build requested: opa 42b42cf, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3059162868 of opa 42b42c...
+= thinking_tokens
+= thinking_tokens
+The build job is running (pipeline 3059162868); I'll wait for its completion notice.
+> Bash until ! kill -0 731 2>/dev/null; do sleep 30; done; tail -15 /tmp/build13.log
+= task_started
+= background_tasks_changed
+= task_updated
+< Command did not complete within its 600s timeout and was moved to the background (ID: byo3cu21e). Output is being written to: /builds/looper/opa/homes/looper-13/tmp/claude-61000/-builds-looper-opa-issues-13/05832f6f-8a23-44ba-9599-7ed8567f2159/tasks/byo3cu21e.output. You will be notified when it com...
+> Bash cat /tmp/build13.log; gh api repos/tacplus-dev/opa/commits/main --jq .sha | cut -c1-7
+< [2026-11-12T11:35:59Z] checkpoint of #13 (a build) pushed to looper/opa-13:  5 files changed, 396 insertions(+), 13 deletions(-) [2026-11-12T11:35:59Z] build requested: opa 42b42cf, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3059162868 of opa 42b42c...
+= thinking_tokens
+= thinking_tokens
+> Bash which glab; curl -s https://gitlab.com/api/v4/projects/tacplus-dev%2Fbuild/pipelines/3059162868 | head -c 600
+< /usr/local/bin/glab {"message":"404 Project Not Found"}
+> Bash glab api projects/tacplus-dev%2Fbuild/pipelines/3059162868 2>&1 | head -c 600; echo; glab api "projects/tacplus-dev%2Fbuild/pipelines/3059162868/jobs" 2>&1 | jq -r '.[] | "\(.name) \(.status) \(.started_at) \(.runner.description)"' 2>&1 | head
+< {"message":"404 Project Not Found"}glab: 404 Project Not Found (HTTP 404)  jq: error (at <stdin>:1): Cannot index string with string "runner" jq: parse error: Invalid numeric literal at line 1, column 40
+= thinking_tokens
+= thinking_tokens
+> Bash /usr/local/bin/repo-looper --repo opa --issue 13 --checkpoint "DONE: fix committed 42b42cf (parseTokenUse json.Number etc., unrecognised token_use -> codes.Internal; tests evaluate real policies; STATE.md v0.1.3). Build pipeline 3059162868 (full gates) running. LEFT: build verdict; land; just gates ...
+< [2026-11-12T11:46:39Z] checkpoint of #13 (a step) pushed to looper/opa-13:  5 files changed, 425 insertions(+), 13 deletions(-)
+Waiting for the build's notification.
+> Bash until ! kill -0 731 2>/dev/null; do sleep 30; done; tail -15 /tmp/build13.log
+= background_tasks_changed
+= task_started
+< Command running in background with ID: b27fjksy4. Output is being written to: /builds/looper/opa/homes/looper-13/tmp/claude-61000/-builds-looper-opa-issues-13/05832f6f-8a23-44ba-9599-7ed8567f2159/tasks/b27fjksy4.output. You will be notified when it completes. To check interim output, use Read on tha...
+> Monitor until ! kill -0 731 2>/dev/null; do sleep 20; done; tail -5 /tmp/build13.log
+= permission_denied
+< This Bash command contains multiple operations. The following parts require approval: kill -0 731, tail -5 /tmp/build13.log
+> Bash sleep 540; tail -5 /tmp/build13.log
+< <tool_use_error>Blocked: sleep 540 followed by: tail -5 /tmp/build13.log. To wait for a condition, use Monitor with an until-loop (e.g. `until <check>; do sleep 2; done`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.</tool_use...
+> Bash timeout 590 bash -c 'while kill -0 731 2>/dev/null; do sleep 15; done'; tail -5 /tmp/build13.log
+= task_started
+= task_updated
+= task_notification
+= background_tasks_changed
+= task_notification
+< [2026-11-12T11:35:59Z] checkpoint of #13 (a build) pushed to looper/opa-13:  5 files changed, 396 insertions(+), 13 deletions(-) [2026-11-12T11:35:59Z] build requested: opa 42b42cf, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3059162868 of opa 42b42c...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash nohup /usr/local/bin/repo-looper --repo opa --issue 13 --land > /tmp/land13.log 2>&1 & echo $!; sleep 20; cat /tmp/land13.log
+= task_started
+= task_notification
+< 4302 [2026-11-12T11:56:52Z] checkpoint of #13 (land queued) pushed to looper/opa-13:  6 files changed, 465 insertions(+), 13 deletions(-) [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; wai...
+> Bash timeout 3500 bash -c 'while kill -0 4302 2>/dev/null; do sleep 30; done'; echo LAND; tail -8 /tmp/land13.log; echo BUILD; tail -4 /tmp/build13.log
+= background_tasks_changed
+= task_started
+< Command running in background with ID: b4z5d7xgu. Output is being written to: /builds/looper/opa/homes/looper-13/tmp/claude-61000/-builds-looper-opa-issues-13/05832f6f-8a23-44ba-9599-7ed8567f2159/tasks/b4z5d7xgu.output. You will be notified when it completes. To check interim output, use Read on tha...
+I'm waiting on the background notifications for the build (b27fjksy4) and the land (b4z5d7xgu).
+> Bash timeout 590 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; tail -3 /tmp/land13.log; tail -2 /tmp/build13.log
+= task_started
+= task_notification
+< [2026-11-12T11:56:52Z] checkpoint of #13 (land queued) pushed to looper/opa-13:  6 files changed, 465 insertions(+), 13 deletions(-) [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting ...
+> Bash timeout 590 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; tail -3 /tmp/land13.log; tail -2 /tmp/build13.log
+= task_started
+= task_notification
+< [2026-11-12T11:56:52Z] checkpoint of #13 (land queued) pushed to looper/opa-13:  6 files changed, 465 insertions(+), 13 deletions(-) [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting ...
+> Bash timeout 590 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; tail -3 /tmp/land13.log; tail -2 /tmp/build13.log; gh issue view 13 --repo tacplus-dev/opa --comments | tail -8
+= task_started
+= task_notification
+< [2026-11-12T11:56:52Z] checkpoint of #13 (land queued) pushed to looper/opa-13:  6 files changed, 465 insertions(+), 13 deletions(-) [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting ...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 12:37 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 12:47 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_updated
+= task_notification
+= background_tasks_changed
+= task_notification
+< 12:56 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+Still waiting: the build (pipeline 3059162868) and the queued land have both been pending for about an hour. Neither has returned a verdict yet, so I'm still polling.
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 13:06 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 13:16 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 13:26 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_updated
+= task_notification
+= background_tasks_changed
+= task_notification
+< 13:36 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+= thinking_tokens
+= thinking_tokens
+The wait job for the build hit its 2-hour limit; the build itself (PID 731) is still running with no verdict. I'll check whether the manager's queue is moving at all.
+> Bash gh api "repos/tacplus-dev/opa/issues/comments?since=2026-11-11T20:00:00Z&per_page=50" --jq '.[] | "\(.created_at) #\(.issue_url|split("/")|last) \(.user.login): \(.body|split("\n")[0]|.[0:160])"'
+< 2026-11-11T22:00:59Z #14 tacplus-manager[bot]: The manager did not merge [`looper/opa-14`](https://github.com/tacplus-dev/opa/tree/looper/opa-14): red, nothing merges without green gates. Nothing is merged;  2026-11-11T22:04:47Z #14 tacplus-looper[bot]: The looper of opa starts this issue with its l...
+> Bash for i in 11 14 12; do echo "== #$i"; gh api "repos/tacplus-dev/opa/issues/$i/comments?per_page=100" --jq '[.[] | select(.user.login|test("manager|looper"))] | .[-3:][] | "\(.created_at) \(.user.login)\n\(.body[0:1500])\n"'; done; gh issue view 18 --repo tacplus-dev/cluster --json title,state
+< == #11 2026-11-12T03:15:01Z tacplus-looper[bot] Status at 03:15Z, 2026-11-12. This run ends with the land queued, and the issue now waits on the build service.  - **Committed:** 0814b9d on `looper/opa-11`, rebased on main ffb03b2. It is the same change as e41bf83 / 5c63086:   - `NewPolicyEvaluator` ...
+No build in this pool has returned a verdict since 2026-11-11, so the fault is outside this repository. I'll check whether the blocking issues are still open.
+> Bash for r in looper/113 looper/128 cluster/18; do gh api repos/tacplus-dev/${r%/*}/issues/${r#*/} --jq '"\(.html_url) \(.state) \(.title)"'; done
+< https://github.com/tacplus-dev/looper/issues/113 open Triggered tacplus-dev/build pipelines never report: no commit status, not even pending, and --build waits 3h for nothing (website 325305c, launcher 88cfeae) https://github.com/tacplus-dev/looper/issues/128 open A manager turns a land red after 3h...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+All three are still open. My build should give its verdict (or "no verdict within 3h") around 14:36Z, so I'll wait for that before deciding.
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_updated
+= task_notification
+= background_tasks_changed
+= task_notification
+< 13:47 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 13:56 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 14:06 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 14:16 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -1 /tmp/build13.log
+= task_started
+= task_notification
+< 14:26 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. the build job https://gitlab.com/tacplus-dev/build/-...
+> Bash timeout 595 bash -c 'while kill -0 4302 2>/dev/null && kill -0 731 2>/dev/null; do sleep 15; done'; date -u +%H:%M; tail -1 /tmp/land13.log; tail -3 /tmp/build13.log
+= task_started
+= task_notification
+< 14:36 [2026-11-12T11:56:54Z] queued: the manager of opa merges looper/opa-13 after the lands queued before it, one at a time, and says on the issue what came of it; waiting for its verdict. If your time runs out first, it still lands it after you. [2026-11-12T11:35:59Z] build requested: opa 42b42cf,...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash tail -25 PROPOSALS.md
+< # Proposals: opa  Written by loopers. Each proposal: what, why, links. Jody promotes accepted ones into ROADMAP.md (via an agent); the looper then marks it `promoted` or `declined` here with the date.  ## Open - **ROADMAP.md: floor 2.5, and #1 superseded** (2026-10-29, #7): main declares `tacplus: "...
+> Edit /builds/looper/opa/issues/13/PROPOSALS.md
+< The file /builds/looper/opa/issues/13/PROPOSALS.md has been updated successfully.
+> Bash git add PROPOSALS.md && git commit -q -m "PROPOSALS.md: fail closed on the proxy policy's other result fields (#13)  #13 makes an unrecognised token_use an error; the other fields of a proxy policy result still drop a value of the wrong type silently.  Co-Authored-By: Claude <noreply@anthropic.com>"...
+< 6704cb2 PROPOSALS.md: fail closed on the proxy policy's other result fields (#13) 42b42cf parseTokenUse: honour OPA's json.Number, fail on an unrecognised token_use (#13) ffb03b2 PROPOSALS.md: the nightly scan's proposals (looper) [2026-11-12T14:36:51Z] checkpoint of #13 (a step) pushed to looper/op...
+= thinking_tokens
+= thinking_tokens
+Now the status comment on the issue, then the outcome file.
+> Bash gh issue comment 13 --repo tacplus-dev/opa --body-file - <<'EOF' Status at 14:37Z, 2026-11-12. This run ends with the land queued. The issue waits on the build service.  - **Committed** on `looper/opa-13`, rebased on main `ffb03b2`:   - `42b42cf`: the fix and its tests. It is the same change as 6733...
+< https://github.com/tacplus-dev/opa/issues/13#issuecomment-6826573874 Blocked-by: tacplus-dev/looper#113 Blocked-by: tacplus-dev/looper#128
+#13's fix is committed and queued to land, but it isn't verified: the build service returned no result in 3 hours. So nothing has merged, `v0.1.3` isn't tagged and the issue stays open.
+
+**The fix** (`42b42cf` on `looper/opa-13`):
+- `parseTokenUse` now handles the numbers OPA returns (`json.Number`), plus Go's `float64`, `int64` and `int`. A number is accepted only if it is a whole number that maps to a real TokenUse value, so nothing gets truncated. This also covers #12. The string forms (`"TOKEN_USE_EXTERNAL"`, `"EXTERNAL"`) still work.
+- As Jody's triage asked, any other `token_use` (`4294967302`, `6.5`, `9999`, an unknown name, `null`, …) now makes `EvalProxyPolicy` fail with `codes.Internal`. Before, it silently became TOKEN_USE_UNSPECIFIED. Leaving `token_use` out still means unspecified.
+- The tests in `internal/handler_proxy_token_use_test.go` run real policies through `EvalProxyPolicy`.
+- I committed a PROPOSALS.md follow-up separately (`6704cb2`). The proxy policy's other result fields still drop a value of the wrong type silently.
+
+**Not verified:**
+- Build pipeline 3059162868 ended with "no verdict within 3h". That means the build never reported back, not that a gate failed.
+- No opa build has returned a verdict since 2026-11-11; #11, #12 and #14 ended the same way. This is the known outage in tacplus-dev/looper#113, #128 and tacplus-dev/cluster#18.
+- I couldn't compile or run the tests here: there's no container runtime and the generated code is absent. Only `gofmt` was checked, and it's clean.
+- `looper-trace check` passes. `EvalProxyPolicy` makes no outgoing calls, so there is no `trace_id` to pass on.
+
+**What happens next:**
+- The land has been queued since 11:56Z. If the gates pass, the manager merges it after this run ends.
+- The next run then runs `just gates` on main, tags and pushes `v0.1.3`, comments and closes #13. There's no release/0.1 branch, so nothing needs backporting.
+- #12's queued branch calls `parseTokenUse` the old way, so whichever of #12 and #13 lands second has to be updated to match.
+
+I posted this status on #13 and wrote `Blocked-by: tacplus-dev/looper#113` and `Blocked-by: tacplus-dev/looper#128` to the outcome file, so the issue is worked again once both close.
+= success: #13's fix is committed and queued to land, but it isn't verified: the build service returned no result in 3 hours. So nothing has merged, `v0.1.3` isn't tagged and the issue stays open.
+
+**The fix** (`42b42cf` on `looper/opa-13`):
+- `parseTokenUse` now handles the numbers OPA returns (`json.Number`), plus Go's `float64`, `int64` and `int`. A number is accepted only if it is a whole number that maps to a real TokenUse value, so nothing gets truncated. This also covers #12. The string forms (`"TOKEN_USE_EXTERNAL"`, `"EXTERNAL"`) still work.
+- As Jody's triage asked, any other `token_use` (`4294967302`, `6.5`, `9999`, an unknown name, `null`, …) now makes `EvalProxyPolicy` fail with `codes.Internal`. Before, it silently became TOKEN_USE_UNSPECIFIED. Leaving `token_use` out still means unspecified.
+- The tests in `internal/handler_proxy_token_use_test.go` run real policies through `EvalProxyPolicy`.
+- I committed a PROPOSALS.md follow-up separately (`6704cb2`). The proxy policy's other result fields still drop a value of the wrong type silently.
+
+**Not verified:**
+- Build pipeline 3059162868 ended with "no verdict within 3h". That means the build never reported back, not that a gate failed.
+- No opa build has returned a verdict since 2026-11-11; #11, #12 and #14 ended the same way. This is the known outage in tacplus-dev/looper#113, #128 and tacplus-dev/cluster#18.
+- I couldn't compile or run the tests here: there's no container runtime and the generated code is absent. Only `gofmt` was checked, and it's clean.
+- `looper-trace check` passes. `EvalProxyPolicy` makes no outgoing calls, so there is no `trace_id` to pass on.
+
+**What happens next:**
+- The land has been queued since 11:56Z. If the gates pass, the manager merges it after this run ends.
+- The next run then runs `just gates` on main, tags and pushes `v0.1.3`, comments and closes #13. There's no release/0.1 branch, so nothing needs backporting.
+- #12's queued branch calls `parseTokenUse` the old way, so whichever of #12 and #13 lands second has to be updated to match.
+
+I posted this status on #13 and wrote `Blocked-by: tacplus-dev/looper#113` and `Blocked-by: tacplus-dev/looper#128` to the outcome file, so the issue is worked again once both close.
