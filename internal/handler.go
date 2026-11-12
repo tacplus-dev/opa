@@ -159,9 +159,9 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 		zap.String("namespace", req.GetNamespace()),
 		zap.Strings("claim_keys", claimKeys))
 
-	result, err := eval.Evaluate(input)
+	result, err := eval.Evaluate(ctx, input)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "OPA eval: %v", err)
+		return nil, evalError(ctx, err)
 	}
 
 	zap.L().Info("EvalEntitlement result", zap.Any("result", result), zap.String("type", fmt.Sprintf("%T", result)))
@@ -246,6 +246,16 @@ func (h *Handler) EvalEntitlement(ctx context.Context, caller *servicemanager.Ca
 	zap.L().Info("EvalEntitlement response", zap.String("token_entitlements", string(normalizedJSON)))
 
 	return resp, nil
+}
+
+// evalError is the status of a failed evaluation: DEADLINE_EXCEEDED or CANCELED
+// when the RPC's context stopped it, so kernel sees its own deadline rather than
+// a policy failure, and INTERNAL otherwise.
+func evalError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return status.Errorf(status.FromContextError(ctxErr).Code(), "OPA eval: %v", err)
+	}
+	return status.Errorf(codes.Internal, "OPA eval: %v", err)
 }
 
 // allEntitlementGrantTokens returns the package-wide wildcard grant for every
@@ -583,9 +593,9 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 
 	zap.L().Info("EvalProxyPolicy", zap.String("metadata", req.GetMetadata()))
 
-	result, err := eval.Evaluate(input)
+	result, err := eval.Evaluate(ctx, input)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "OPA eval: %v", err)
+		return nil, evalError(ctx, err)
 	}
 
 	obj, ok := result.(map[string]interface{})
