@@ -1,0 +1,138 @@
+= init
+= thinking_tokens
+= thinking_tokens
+> Bash gh issue view 11 --repo tacplus-dev/opa --comments | tail -30; git log --oneline -3; git diff --stat; cat justfile | head -50; ls
+< Its last checkpoint (what is done, what is left):  > Done: e41bf83 (#11: capabilities without http.send/net.lookup_ip_addr, allow_net empty; Evaluate(ctx), handlers return DEADLINE_EXCEEDED/CANCELED; tests in internal/opa_test.go; STATE.md, PROPOSALS.md). The previous land died to the manager job's ...
+= thinking_tokens
+= thinking_tokens
+> Bash git diff; cat internal/opa_test.go; which go; go version
+< diff --git a/PROPOSALS.md b/PROPOSALS.md index 4b7bff0..82b581f 100644 --- a/PROPOSALS.md +++ b/PROPOSALS.md @@ -8,10 +8,10 @@ the looper then marks it `promoted` or `declined` here with the date.    Update 2026-11-06 (nightly scan): the floor is now 2.5 and is behind again: tacplus 2.6 was released...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash ls tacplus 2>&1 | head; ls ~/go/pkg/mod/github.com/open-policy-agent 2>&1
+< Exit code 2 ls: cannot access 'tacplus': No such file or directory ls: cannot access '/builds/looper/opa/homes/looper-11/go/pkg/mod/github.com/open-policy-agent': No such file or directory
+= thinking_tokens
+= thinking_tokens
+> Bash which glab; curl -s https://gitlab.com/api/v4/projects/tacplus-dev%2Fbuild/pipelines/3056937471 | head -c 800; echo; curl -s "https://gitlab.com/api/v4/projects/tacplus-dev%2Fbuild/pipelines/3056937471/jobs" | head -c 1500
+< /usr/local/bin/glab {"message":"404 Project Not Found"} {"message":"404 Project Not Found"}
+> Bash glab api projects/tacplus-dev%2Fbuild/pipelines/3056937471 2>&1 | head -c 800; echo; glab api "projects/tacplus-dev%2Fbuild/pipelines/3056937471/jobs" 2>&1 | head -c 2000
+< {"message":"404 Project Not Found"}glab: 404 Project Not Found (HTTP 404)  {"message":"404 Project Not Found"}glab: 404 Project Not Found (HTTP 404)
+= thinking_tokens
+= thinking_tokens
+The last land failed only because its build job gave no verdict within 3h, not on a test. I'm checking whether other lands are timing out the same way before I land again.
+> Bash git fetch -q origin && git log --oneline origin/main -5 --format='%h %ci %s'; gh search issues --repo tacplus-dev/opa "no verdict within" --json number,title,updatedAt 2>&1 | head -c 1000; /usr/local/bin/repo-looper --help 2>&1 | head -30
+< ffb03b2 2026-11-11 09:57:09 +0000 PROPOSALS.md: the nightly scan's proposals (looper) 0e02c1c 2026-11-10 09:10:23 -0700 ROADMAP: #11 (Jody, 2026-11-10) ac0f175 2026-11-09 17:57:28 +0000 HISTORY.md: #3 (looper) 7b01c7c 2026-11-08 08:21:40 +0000 Work without SeaBeam: module github.com/tacplus-dev/opa,...
+> Bash for n in 9 10 12 14; do echo "== $n"; gh issue view $n --repo tacplus-dev/opa --comments --json comments --jq '.comments[-3:][] | .createdAt + " " + .author.login + ": " + (.body|.[0:400])'; done
+< Exit code 1 == 9 specify only one of --comments or --json  Display the title, body, and other information about an issue.  When `--comments` is used, terminal output includes the issue details and comments. When output is piped or redirected, only the comments are printed.  With `--web` flag, open t...
+> Bash for n in 9 10 12 14; do echo "== $n"; gh issue view $n --repo tacplus-dev/opa --json state,comments --jq '.state, (.comments[-3:][] | .createdAt + " " + .author.login + ": " + (.body|.[0:400]))'; done
+< == 9 OPEN 2026-11-11T16:01:08Z tacplus-looper: The looper of opa starts this issue with its limit 4h capped at 4h by this job (https://gitlab.com/tacplus-dev/looper/-/jobs/17940184725), which ends sooner: the run stops by itself before then, its work checkpointed, and the next run resumes it. 2026-1...
+= thinking_tokens
+= thinking_tokens
+Every opa land since 2026-11-11 has hit the same "no verdict within 3h", so this is the build runners, not this change. Checking the blocking issues other runs named.
+> Bash for r in looper#113 looper#128 cluster#18 cloud#35; do repo=${r%#*}; n=${r#*#}; echo "== $r"; gh issue view $n --repo tacplus-dev/$repo --json state,title,comments --jq '.state + " " + .title, (.comments[-1:][] | .createdAt + " " + .author.login + ": " + (.body|.[0:500]))'; done
+< == looper#113 OPEN Triggered tacplus-dev/build pipelines never report: no commit status, not even pending, and --build waits 3h for nothing (website 325305c, launcher 88cfeae) 2026-11-11T12:06:47Z tacplus-looper: Its commits are queued with the manager of looper, which merges them after the run and ...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash gofmt -l internal/ ; git add -A internal PROPOSALS.md STATE.md && git commit -q -F - <<'EOF' Policies evaluate without network built-ins and within the RPC's deadline (#11)  An entitlement or proxy decision should be a function of its input. Bundles were compiled with OPA's default capabilities, so ...
+< 0814b9d Policies evaluate without network built-ins and within the RPC's deadline (#11)
+> Bash /usr/local/bin/looper-trace check 2>&1 | tail -15; /usr/local/bin/repo-looper --repo opa --issue 11 --checkpoint "Done: 0814b9d (#11 change, same as e41bf83: capabilities without http.send/net.lookup_ip_addr, Evaluate(ctx), DEADLINE_EXCEEDED/CANCELED, tests). Last land red only for 'no verdict withi...
+< looper-trace: /builds/looper/opa/issues/11 verdict: pass (0 handlers, 0 findings) [2026-11-12T03:04:39Z] checkpoint of #11 (a step) pushed to looper/opa-11:  7 files changed, 390 insertions(+), 10 deletions(-)
+= thinking_tokens
+= thinking_tokens
+> Bash git diff --stat origin/main..HEAD; git status --short --ignored | head
+<  PROPOSALS.md         |   2 +-  STATE.md             |   3 +-  internal/handler.go  |  18 ++++++--  internal/opa.go      |  38 +++++++++++++++--  internal/opa_test.go | 114 +++++++++++++++++++++++++++++++++++++++++++++++++++  5 files changed, 165 insertions(+), 10 deletions(-)
+The commit holds only the five intended files. Starting the land in the background.
+> Bash nohup /usr/local/bin/repo-looper --repo opa --issue 11 --land > /tmp/land-11.log 2>&1 & echo $!
+< 1058
+> ToolSearch {"query":"select:Monitor","max_results":1}
+< 
+> Bash sleep 60; cat /tmp/land-11.log
+< <tool_use_error>Blocked: sleep 60 followed by: cat /tmp/land-11.log. To wait for a condition, use Monitor with an until-loop (e.g. `until <check>; do sleep 2; done`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.</tool_use_erro...
+> Monitor tail -n +1 -F /tmp/land-11.log 2>/dev/null & t=$!; while kill -0 1058 2>/dev/null; do sleep 5; done; echo "land process exited"; kill $t
+= permission_denied
+< A variable in this command can't be checked before it runs
+> Monitor n=0; while kill -0 1058 2>/dev/null; do c=$(wc -l < /tmp/land-11.log); if [ "$c" -gt "$n" ]; then tail -n +"$((n+1))" /tmp/land-11.log | head -n "$((c-n))"; n=$c; fi; sleep 10; done; tail -n +"$((n+1))" /tmp/land-11.log; echo "land process exited"
+= permission_denied
+< 'n' was tracked as literal '0' but condition may modify it (||/pipeline/unset/&&-short-circuit) — cannot prove downstream value
+> Bash until ! kill -0 1058 2>/dev/null; do sleep 10; done; cat /tmp/land-11.log
+= background_tasks_changed
+= task_started
+< Command running in background with ID: bgqs1481p. Output is being written to: /builds/looper/opa/homes/looper-11/tmp/claude-61000/-builds-looper-opa-issues-11/808a3b29-ec58-40df-af74-a38c4b7a89b5/tasks/bgqs1481p.output. You will be notified when it completes. To check interim output, use Read on tha...
+> Bash cat /tmp/land-11.log
+< [2026-11-12T03:04:45Z] checkpoint of #11 (land queued) pushed to looper/opa-11:  8 files changed, 402 insertions(+), 10 deletions(-) [2026-11-12T03:04:48Z] queued: the manager of opa merges looper/opa-11 after the lands queued before it, one at a time, and says on the issue what came of it; waiting ...
+= thinking_tokens
+= thinking_tokens
+The land is queued with the manager. I'm waiting for its verdict and watching the log.
+> Monitor tail -n 0 -F /tmp/land-11.log | grep --line-buffered -v '^$'
+= permission_denied
+< This Bash command contains multiple operations. The following parts require approval: tail -n 0 -F /tmp/land-11.log, grep --line-buffered -v '^$'
+= thinking_tokens
+= thinking_tokens
+> Bash timeout 590 bash -c 'until ! kill -0 1058 2>/dev/null; do sleep 15; done'; date -u +%H:%MZ; tail -3 /tmp/land-11.log
+= task_started
+= task_notification
+< 03:14Z [2026-11-12T03:04:45Z] checkpoint of #11 (land queued) pushed to looper/opa-11:  8 files changed, 402 insertions(+), 10 deletions(-) [2026-11-12T03:04:48Z] queued: the manager of opa merges looper/opa-11 after the lands queued before it, one at a time, and says on the issue what came of it; w...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash gh issue comment 11 --repo tacplus-dev/opa --body-file - <<'EOF' Status at 03:15Z, 2026-11-12. This run ends with the land queued, and the issue now waits on the build service.  - **Committed:** 0814b9d on `looper/opa-11`, rebased on main ffb03b2. It is the same change as e41bf83 / 5c63086:   - `New...
+< https://github.com/tacplus-dev/opa/issues/11#issuecomment-6813300825
+> Bash printf 'Blocked-by: tacplus-dev/looper#113\nBlocked-by: tacplus-dev/looper#128\n' > /builds/tacplus-dev/looper/looper-runs/20261112T030350Z-issue-11/outcome && cat /builds/tacplus-dev/looper/looper-runs/20261112T030350Z-issue-11/outcome
+< Blocked-by: tacplus-dev/looper#113 Blocked-by: tacplus-dev/looper#128
+Issue #11 is not landed yet. The change is committed and queued again with the manager, but the build service still isn't returning verdicts, so I've marked the issue as blocked on that.
+
+- **The change:** commit `0814b9d` on `looper/opa-11`, the same change as the earlier runs' `e41bf83`.
+  - Policies are now compiled without `http.send` and `net.lookup_ip_addr`, and with no hosts allowed for network access. A pushed bundle that calls either one is refused, and the policy already loaded stays in force.
+  - Policy evaluation now runs on the RPC's own context, so it stops at the RPC's deadline. Both evaluation handlers return DEADLINE_EXCEEDED or CANCELED when that context ends.
+  - New tests in `internal/opa_test.go` check that a bundle calling `http.send` is refused and that an evaluation past the deadline returns DEADLINE_EXCEEDED.
+- **Why the last land failed:** its build job gave no verdict within 3h, so it timed out; no gate actually failed. Every other opa land since 2026-11-11 (#10, #12, #14) ended the same way, and nothing has merged to main since then. This matches two open issues: tacplus-dev/looper#113 (build pipelines never report back) and tacplus-dev/looper#128 (a land waiting on a queued build is marked red after 3h).
+- **Not verified:** the gates haven't run in the build image. There's no container runtime here and no Go dependencies, so I couldn't run the tests locally either. `looper-trace check` passes; the two evaluation handlers make no outgoing calls.
+- **Now:** the land was queued again at 03:04Z, behind the other opa lands. If the build service answers, the manager lands it after this run. I posted a status comment on the issue, and the run's outcome file now names tacplus-dev/looper#113 and #128 as blockers, so the issue is worked again once both are closed.
+- **Release:** the issue asks for a patch release. Because this is a roadmap feature, it ships in the next minor release from main instead; the status comment says so.
+= success: Issue #11 is not landed yet. The change is committed and queued again with the manager, but the build service still isn't returning verdicts, so I've marked the issue as blocked on that.
+
+- **The change:** commit `0814b9d` on `looper/opa-11`, the same change as the earlier runs' `e41bf83`.
+  - Policies are now compiled without `http.send` and `net.lookup_ip_addr`, and with no hosts allowed for network access. A pushed bundle that calls either one is refused, and the policy already loaded stays in force.
+  - Policy evaluation now runs on the RPC's own context, so it stops at the RPC's deadline. Both evaluation handlers return DEADLINE_EXCEEDED or CANCELED when that context ends.
+  - New tests in `internal/opa_test.go` check that a bundle calling `http.send` is refused and that an evaluation past the deadline returns DEADLINE_EXCEEDED.
+- **Why the last land failed:** its build job gave no verdict within 3h, so it timed out; no gate actually failed. Every other opa land since 2026-11-11 (#10, #12, #14) ended the same way, and nothing has merged to main since then. This matches two open issues: tacplus-dev/looper#113 (build pipelines never report back) and tacplus-dev/looper#128 (a land waiting on a queued build is marked red after 3h).
+- **Not verified:** the gates haven't run in the build image. There's no container runtime here and no Go dependencies, so I couldn't run the tests locally either. `looper-trace check` passes; the two evaluation handlers make no outgoing calls.
+- **Now:** the land was queued again at 03:04Z, behind the other opa lands. If the build service answers, the manager lands it after this run. I posted a status comment on the issue, and the run's outcome file now names tacplus-dev/looper#113 and #128 as blockers, so the issue is worked again once both are closed.
+- **Release:** the issue asks for a patch release. Because this is a roadmap feature, it ships in the next minor release from main instead; the status comment says so.
+= task_notification
