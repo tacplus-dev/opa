@@ -12,8 +12,9 @@ generate:
 
 # What every change (ports, releases) must pass: regenerate with the floor's
 # compiler (generated code lives only in tacplus/, so generation touching any
-# file git sees is a failure), check no upstream reference crept back, then
-# build (static, as the release image does), vet and test.
+# file git sees is a failure), check no upstream reference crept back, test
+# the release scripts (ci/), then build (static, as the release image does),
+# vet and test.
 gates:
   #!/usr/bin/env bash
   set -euo pipefail
@@ -30,6 +31,7 @@ gates:
     git status --porcelain >&2
     exit 1
   fi
+  ci/release_test.sh
   CGO_ENABLED=0 go build -trimpath -o bin/opa .
   go vet ./...
   go test ./...
