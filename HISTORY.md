@@ -8,3 +8,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-06 looper issue 37 known vulnerabilities in grpc v1.79.3 and golang.org/x/{net,crypto,text,sys}: bump to patched releases (#4)
 - 2026-11-08 looper issue tacplus floor 2.5 is behind the latest released line (2.6): move the floor to 2.6 and commit tacplus.lock (#8)
 - 2026-11-09 looper issue Work without SeaBeam: no gitlab.com/seabeam module paths, sources or registries (#3)
+- 2026-11-15 looper release v0.1.3 (https://github.com/tacplus-dev/opa/releases/tag/v0.1.3)
