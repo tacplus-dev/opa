@@ -23,6 +23,9 @@ gates:
   # the dated records and the planning files (the brackets keep this line from matching itself).
   upstream="$(git grep -n -I -i -E 'sea[b]eam|sona[r]|scott[y]' -- . ':!PROVENANCE.md' ':!decisions/' ':!ROADMAP.md' ':!HISTORY.md' ':!STATE.md' ':!PROPOSALS.md' || true)"
   test -z "$upstream" || { echo "gates: upstream references:" >&2; echo "$upstream" >&2; exit 1; }
+  # The release image runs unprivileged (#10): the Dockerfile's last USER is the fixed 65532:65532.
+  user="$({ grep -E '^USER[[:space:]]' Dockerfile || true; } | tail -n 1 | awk '{print $2}')"
+  test "$user" = "65532:65532" || { echo "gates: Dockerfile's last USER is '${user}', not 65532:65532" >&2; exit 1; }
   before="$(git status --porcelain)"
   {{TACPLUS}} build --tag latest
   if [[ "$(git status --porcelain)" != "$before" ]]; then

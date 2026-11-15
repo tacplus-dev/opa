@@ -27,4 +27,11 @@ COPY bin/opa /usr/local/bin/opa
 ARG TARGETARCH
 COPY launcher-linux-${TARGETARCH} /usr/local/bin/launcher
 ENV LAUNCH_CMD="opa" HEALTH_PORT=8443
+
+# Nothing opa does needs root, and it writes nothing (policies arrive over gRPC,
+# the bootstrap config is read only). A fixed UID/GID, not an adduser default, so
+# a pod's securityContext (runAsUser, fsGroup) can name it.
+RUN addgroup -S -g 65532 opa && \
+    adduser -S -D -H -u 65532 -G opa -s /sbin/nologin opa
+USER 65532:65532
 ENTRYPOINT ["launcher"]
