@@ -13,3 +13,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-15 looper issue No gates: the justfile has no `gates` recipe, so `just gates` fails on main (#5)
 - 2026-11-15 looper issue Dockerfile: base image alpine:3.22 is behind the latest Alpine line (3.24) (#6)
 - 2026-11-15 looper issue Policies evaluate without network built-ins and within the RPC's deadline (#11)
+- 2026-11-15 looper issue Release image runs as root: semgrep missing-user-entrypoint (HIGH) on Dockerfile:30 fails the build's security checks (#10)
