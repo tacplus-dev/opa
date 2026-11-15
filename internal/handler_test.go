@@ -287,8 +287,16 @@ func TestParseTokenUseRefusesNumbersOutsideTheEnum(t *testing.T) {
 		{float64(99), token_pb.TokenUse_TOKEN_USE_UNSPECIFIED},
 		{int64(-1), token_pb.TokenUse_TOKEN_USE_UNSPECIFIED},
 	} {
-		if got := parseTokenUse(tc.raw); got != tc.want {
-			t.Errorf("parseTokenUse(%#v) = %v, want %v", tc.raw, got, tc.want)
+		// Since #13 a refused number is an error, not a silent TOKEN_USE_UNSPECIFIED.
+		got, err := parseTokenUse(tc.raw)
+		if tc.want == token_pb.TokenUse_TOKEN_USE_UNSPECIFIED {
+			if err == nil {
+				t.Errorf("parseTokenUse(%#v) = %v, nil; want an error", tc.raw, got)
+			}
+			continue
+		}
+		if err != nil || got != tc.want {
+			t.Errorf("parseTokenUse(%#v) = %v, %v; want %v, nil", tc.raw, got, err, tc.want)
 		}
 	}
 }

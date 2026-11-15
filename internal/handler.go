@@ -574,7 +574,8 @@ func dedupeStrings(in []string) []string {
 //   - append_aud: array[string] — audiences to append to the minted token (never replaces original)
 //   - extra_claims: object — additional JWT claims to inject
 //   - auth_type: string — credential format ("jwt" or "saml")
-//   - token_use: string or int — token_use claim; must be "TOKEN_USE_EXTERNAL"/6 or unset
+//   - token_use: string or int — token_use claim; must be "TOKEN_USE_EXTERNAL"/6 or unset;
+//     a value that is not a TokenUse name or value fails the call (codes.Internal)
 func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Caller, req *proxypolicy_pb.ProxyPolicyEvalInput) (*proxypolicy_pb.ProxyPolicyEvalResult, error) {
 	eval, err := h.getEvaluator(ProxyPolicyEntryPoint)
 	if err != nil {
@@ -644,7 +645,11 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 	}
 
 	if tokenUseRaw, ok := obj["token_use"]; ok {
-		resp.TokenUse = parseTokenUse(tokenUseRaw)
+		tokenUse, err := parseTokenUse(tokenUseRaw)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "proxy policy: %v", err)
+		}
+		resp.TokenUse = tokenUse
 	}
 
 	// extra_claims: additional JWT claims the kernel stamps into the minted
@@ -700,38 +705,67 @@ func (h *Handler) loadPolicy(policy *opaPb.OpaPolicy, wantEntryPoint string) err
 }
 
 // parseTokenUse converts an OPA-returned token_use value (string name or number) to the
-// token.TokenUse enum. Returns TOKEN_USE_UNSPECIFIED for unrecognized values.
-// OPA policies may return the string name ("TOKEN_USE_EXTERNAL") or the integer value (6).
-func parseTokenUse(raw interface{}) token_pb.TokenUse {
+// token.TokenUse enum. OPA policies may return the string name ("TOKEN_USE_EXTERNAL"),
+// its short form ("EXTERNAL") or the integer value (6). OPA hands numbers back as
+// json.Number (#13); a number is accepted only when it is an integer in int32 range
+// and a defined TokenUse, never truncated (#12). Anything else, the empty string
+// included, is an error, not a silent TOKEN_USE_UNSPECIFIED.
+func parseTokenUse(raw interface{}) (token_pb.TokenUse, error) {
 	switch v := raw.(type) {
 	case string:
+		// The proto names, TOKEN_USE_UNSPECIFIED included (as its number 0 is below).
+		if n, ok := token_pb.TokenUse_value[v]; ok {
+			return token_pb.TokenUse(n), nil
+		}
+		// The generated ParseTokenUse maps "" to the zero value with no error: an
+		// empty name is not a TokenUse here, only a missing token_use is unspecified.
+		if v == "" {
+			break
+		}
 		if tu, err := token_pb.ParseTokenUse(v); err == nil {
-			return tu
+			return tu, nil
 		}
 		// Also accept short form without prefix.
 		if tu, err := token_pb.ParseTokenUse("TOKEN_USE_" + v); err == nil {
-			return tu
+			return tu, nil
+		}
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return tokenUseFromInt(n)
+		}
+		if f, err := v.Float64(); err == nil {
+			return tokenUseFromFloat(f)
 		}
 	case float64:
-		if v == math.Trunc(v) && v >= math.MinInt32 && v <= math.MaxInt32 {
-			return tokenUseFromNumber(int64(v))
-		}
+		return tokenUseFromFloat(v)
 	case int64:
-		return tokenUseFromNumber(v)
+		return tokenUseFromInt(v)
+	case int:
+		return tokenUseFromInt(int64(v))
 	}
-	return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+	return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED, fmt.Errorf("token_use %v (%T) is not a TokenUse name or value", raw, raw)
 }
 
-// tokenUseFromNumber returns the TokenUse numbered n, or TOKEN_USE_UNSPECIFIED when no
-// TokenUse has that number: a number outside int32 is refused, never truncated onto one.
-func tokenUseFromNumber(n int64) token_pb.TokenUse {
+// tokenUseFromFloat returns the TokenUse numbered f, or an error when f is not an
+// integer or no TokenUse has that number.
+func tokenUseFromFloat(f float64) (token_pb.TokenUse, error) {
+	if f != math.Trunc(f) || f < math.MinInt32 || f > math.MaxInt32 {
+		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED, fmt.Errorf("token_use %v is not a TokenUse value", f)
+	}
+	return tokenUseFromInt(int64(f))
+}
+
+// tokenUseFromInt returns the TokenUse numbered n, or an error when no TokenUse has
+// that number: a number outside int32 is refused, never truncated onto one (#12).
+func tokenUseFromInt(n int64) (token_pb.TokenUse, error) {
 	if n < math.MinInt32 || n > math.MaxInt32 {
-		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED, fmt.Errorf("token_use %d is not a TokenUse value", n)
 	}
-	if _, ok := token_pb.TokenUse_name[int32(n)]; !ok {
-		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED
+	v := int32(n)
+	if _, ok := token_pb.TokenUse_name[v]; !ok {
+		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED, fmt.Errorf("token_use %d is not a TokenUse value", n)
 	}
-	return token_pb.TokenUse(n)
+	return token_pb.TokenUse(v), nil
 }
 
 // getEvaluator returns the PolicyEvaluator for the given entry_point.
