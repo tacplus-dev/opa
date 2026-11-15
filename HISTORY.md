@@ -11,3 +11,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-15 looper release v0.1.3 (https://github.com/tacplus-dev/opa/releases/tag/v0.1.3)
 - 2026-11-15 looper issue Pin the build: floor 2.6 and a committed tacplus.lock, so the build pipeline and its security checks run on this repository (#9, a475fb7)
 - 2026-11-15 looper issue No gates: the justfile has no `gates` recipe, so `just gates` fails on main (#5)
+- 2026-11-15 looper issue Dockerfile: base image alpine:3.22 is behind the latest Alpine line (3.24) (#6)
