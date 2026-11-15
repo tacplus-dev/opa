@@ -5,6 +5,7 @@ import (
 	"os"
 
 	handler "github.com/tacplus-dev/opa/internal"
+	"github.com/tacplus-dev/opa/internal/bootstrap"
 	servicemanager "github.com/tacplus-dev/opa/tacplus/s2sm"
 	pb "github.com/tacplus-dev/opa/tacplus/types/services/opa"
 )
@@ -27,7 +28,7 @@ func main() {
 	// Kernel-provided policies will override these if they are non-nil.
 	bootstrapPath := os.Getenv("BOOTSTRAP_CONFIG")
 	if bootstrapPath != "" {
-		data, readErr := os.ReadFile(bootstrapPath)
+		data, readErr := bootstrap.Read(bootstrapPath)
 		if readErr != nil {
 			log.Fatalf("bootstrap: failed to read %s: %v", bootstrapPath, readErr)
 		}
