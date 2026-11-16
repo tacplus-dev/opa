@@ -15,3 +15,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-15 looper issue Policies evaluate without network built-ins and within the RPC's deadline (#11)
 - 2026-11-15 looper issue Release image runs as root: semgrep missing-user-entrypoint (HIGH) on Dockerfile:30 fails the build's security checks (#10)
 - 2026-11-15 looper release v0.2.0 (https://github.com/tacplus-dev/opa/releases/tag/v0.2.0)
+- 2026-11-16 looper release v0.2.1 (https://github.com/tacplus-dev/opa/releases/tag/v0.2.1)
