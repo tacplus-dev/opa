@@ -17,3 +17,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-15 looper release v0.2.0 (https://github.com/tacplus-dev/opa/releases/tag/v0.2.0)
 - 2026-11-16 looper release v0.2.1 (https://github.com/tacplus-dev/opa/releases/tag/v0.2.1)
 - 2026-11-16 looper issue parseTokenUse ignores json.Number: a policy's numeric token_use (documented as accepted) always becomes TOKEN_USE_UNSPECIFIED (#13)
+- 2026-11-16 looper issue New non-blocking findings: gosec G706 (LOW, log injection) at main.go:32, :39, :47 (#16)
