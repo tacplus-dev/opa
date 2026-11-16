@@ -57,7 +57,7 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # Every tag: the line tag and the notes depend on the releases already made.
           fetch-depth: 0
@@ -96,12 +96,12 @@ jobs:
           # from github.com with it.
           GH_TOKEN: ${{ github.token }}
         run: ${{ steps.plan.outputs.tools }}/build-image.sh ${{ steps.plan.outputs.tools }}/release-build.sh $PLATFORMS
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: tacplus-dev/launcher
           ref: ${{ env.LAUNCHER_COMMIT }}
           path: bin/launcher-src
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: bin/launcher-src/go.mod
           cache: false
@@ -112,9 +112,9 @@ jobs:
             CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags="-s -w" -o "../launcher/launcher-linux-$arch" .
           done
       # The Dockerfile's apk add runs on each target architecture.
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         if: env.DRY_RUN != 'true'
         with:
           registry: ghcr.io
