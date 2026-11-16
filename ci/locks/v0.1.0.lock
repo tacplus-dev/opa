@@ -1,0 +1,4 @@
+# The pin v0.1.0 is built with (ci/checkout.sh): v0.1.0 predates tacplus.lock (#8) and declares the floor
+# tacplus "2.5", so it takes that line's newest release and its build image, by digest, as `tacplus pin` writes them.
+tacplus: 2.5.23
+build_image: ghcr.io/tacplus-dev/tacplus/build:2.5.23@sha256:ce7b4efde55f4c0dca1a7f84e1cbb4d103292bcfb4f4b0fa026e2390ed0d9867

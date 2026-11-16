@@ -1,0 +1,38 @@
+name: ci
+
+# The gates (just gates), in the build image tacplus.lock pins (ci/build-image.sh), on main and pull requests.
+# The release runs them on its tag first (release.yml), with `ref` naming the tag when it is an existing one
+# built by hand (ci/checkout.sh), whose own tacplus.lock, or the pin ci/locks/ names for it, picks the image.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: "A tag to run the gates on instead of the commit that runs the workflow, when it exists"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag
+        if: inputs.ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: ci/checkout.sh "$REF"
+      - name: just gates
+        env:
+          # Read-only (this job's permissions): tacplus fetches `depends` from github.com with it.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tools=ci
+          [[ -d "$RUNNER_TEMP/ci" ]] && tools="$RUNNER_TEMP/ci"
+          "$tools/build-image.sh" just gates
