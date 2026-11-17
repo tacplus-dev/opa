@@ -1,0 +1,7 @@
+# The build's security findings opa accepts (looper-scan: id, reason,
+# decided_by, expires). An exception accepts its id everywhere it is found.
+exceptions:
+  - id: DS-0026
+    reason: "No HEALTHCHECK in the release image: the fleets run it under Kubernetes, which ignores a Dockerfile HEALTHCHECK and uses the pod's probes, and the launcher (PID 1) already kills a deadlocked child on gRPC health (HEALTH_PORT). #18"
+    decided_by: jodydadescott (hub, 2026-11-17)
+    expires: 2027-05-17
