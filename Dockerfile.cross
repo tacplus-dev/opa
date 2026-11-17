@@ -1,3 +1,0 @@
-FROM gcr.io/distroless/static:nonroot
-COPY bin/opa /opa
-ENTRYPOINT ["/opa"]
