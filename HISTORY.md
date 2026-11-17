@@ -21,3 +21,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-16 looper issue GO-2026-6859 (net/http, stdlib) reachable: the pinned build:2.6.1 builds with Go < 1.27.4; move tacplus.lock to 2.6.8 (#14)
 - 2026-11-16 looper release v0.3.0 (https://github.com/tacplus-dev/opa/releases/tag/v0.3.0)
 - 2026-11-16 looper issue Release: tag vMAJOR.MINOR.PATCH (start at v0.1.0) and publish its image (#2)
+- 2026-11-17 looper issue New non-blocking findings: GO-2026-5932 now fixed in golang.org/x/crypto v0.59.0, and trivy DS-0026 (no HEALTHCHECK) on Dockerfile (#18)
