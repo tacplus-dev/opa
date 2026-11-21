@@ -644,7 +644,7 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 			for _, item := range v {
 				s, ok := item.(string)
 				if !ok {
-					return nil, status.Errorf(codes.Internal, "proxy policy: append_aud entries must be strings, got %v (%T)", item, item)
+					return nil, status.Errorf(codes.Internal, "proxy policy: append_aud entries must be strings, got %T", item)
 				}
 				// An empty audience adds nothing to the token.
 				if s != "" {
@@ -704,9 +704,10 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 }
 
 // wrongTypedField is the error for a proxy-policy result field of the wrong
-// type: it fails the call rather than dropping the field (#19).
+// type: it fails the call rather than dropping the field (#19). It names the
+// type, not the value, which may carry the caller's claims.
 func wrongTypedField(field, want string, raw interface{}) error {
-	return status.Errorf(codes.Internal, "proxy policy: %s must be %s, got %v (%T)", field, want, raw, raw)
+	return status.Errorf(codes.Internal, "proxy policy: %s must be %s, got %T", field, want, raw)
 }
 
 // loadPolicy creates or replaces the PolicyEvaluator for wantEntryPoint.
