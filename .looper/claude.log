@@ -1,0 +1,195 @@
+= init
+> Bash cd /builds/looper/opa/issues/19; gh issue view 19 --repo tacplus-dev/opa --comments | tail -20; ls; grep -n "" internal/handler.go | sed -n '1,400p' | grep -n -i -E "proxy|token_use|parseTokenUse|append_aud|extra_claims|auth_type|reason|\"url\"" 
+< author:	tacplus-looper association:	none edited:	false status:	none -- The looper of opa starts this issue on `claude-opus-5-5`, the default model. Its limit 4h is capped at 4h by this job (https://gitlab.com/tacplus-dev/looper/-/jobs/18247875206), which ends sooner: the run stops by itself before t...
+> Read /builds/looper/opa/issues/19/internal/handler.go
+< 150		// CREDENTIALS at the sink -- authorization, cookie, *-token, *-secret, 151		// Bearer -- and nothing else, so identity claims pass straight through it. 152		// The key names carry the diagnostic value here (which claims the IDP sent, 153		// which the policy had to work with); the values are t...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; grep -rn -i "auth_type\|AuthType" --include=*.go --include=*.proto --include=*.rego --include=*.md . | grep -v "^./tacplus/" | head -30; grep -n -A12 "other fields fail closed" PROPOSALS.md; ls internal; grep -n "func Test.*Proxy" internal/*_test.go; grep -rn "json.N...
+< ./decisions/security-audit-2026-09-12/raw-grok-complete.md:261:**Correctness / drift (not in table):** `EvalProxyPolicy` never maps `auth_type` onto `resp.AuthType` (SAML policies silently stay JWT). `Evaluate` uses `context.Background()` (ignores RPC cancel). `parseTokenUse` forwards any enum; kern...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; ls proto tacplus 2>&1 | head; grep -rn -B3 -A30 "message ProxyPolicyEvalResult" proto/ 2>/dev/null | head -60; cat internal/handler_proxy_token_use_test.go; grep -n -i "auth_type\|AuthType" decisions/security-audit-2026-09-12/FIX-high-tier.md decisions/security-audit...
+< ls: cannot access 'tacplus': No such file or directory proto: dependencies.yaml registry.yaml services package internal  import ( 	"context" 	"encoding/json" 	"testing"  	"google.golang.org/grpc/codes" 	"google.golang.org/grpc/status"  	fsPb "github.com/tacplus-dev/opa/tacplus/types/sys/filesystem" ...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; cat proto/dependencies.yaml; find proto -type f | head; grep -rln "ProxyPolicyEvalResult" / --include=*.proto 2>/dev/null | head
+= task_started
+= task_notification
+< # registry.yaml and vservice-registry.yaml are now authoritative for field IDs. tools:     go: "1.23"     java: "17"     node: '>=18.0.0'     python: '>=3.8'     rust-edition: "2021"     typescript: ^5.3.3 lang:     go:         dependencies:             github.com/caddyserver/certmagic: v0.25.1     ...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+Reading the proxy-policy handler and its result proto; next I'll write the failing tests.
+> Bash cd /builds/looper/opa/issues/19; gh search code "ProxyPolicyEvalResult" --owner tacplus-dev --limit 10 2>&1 | head; grep -rn "auth_type\|AuthType" ~/go/pkg/mod/github.com/tacplus-dev 2>/dev/null | head
+< (Bash completed with no output)
+> Bash cd /builds/looper/opa/issues/19; cat tacplus.yaml; gh api repos/tacplus-dev/kernel/issues/41 --jq '.title,.state,.body' | head -40
+< language: go tacplus: "2.6" # pkg is derived from go.mod (github.com/tacplus-dev/opa: the org name has a hyphen, # which pkg cannot carry). A derived Go package is <module>/tacplus, so the output is "tacplus". output-dir: tacplus output-name: tacplus src: proto header: |   Copyright (c) 2026 Jody Sc...
+> Bash cd /builds/looper/opa/issues/19; gh api repos/tacplus-dev/kernel/contents/proto/vservices/proxy-policy.proto -H 'Accept: application/vnd.github.raw' 2>&1 | head -120
+< // Copyright (c) 2026 Jody Scott // SPDX-License-Identifier: Apache-2.0  // Package proxypolicy defines the OPA evaluation interface for proxy request // policy enforcement. Given the caller's JWT claims and opaque routing metadata, // the policy returns a permit/deny decision, a resolved destinatio...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; gh api repos/tacplus-dev/kernel/contents/proto/sys/token.proto -H 'Accept: application/vnd.github.raw' 2>&1 | grep -n -B2 -A25 "enum TokenType"; gh search code "auth_type" --owner tacplus-dev --limit 20 2>&1 | head -30
+< (Bash completed with no output)
+> Bash cd /builds/looper/opa/issues/19; gh api repos/tacplus-dev/kernel/contents/proto/sys -H 'Accept: application/vnd.github.raw' --jq '.[].name' 2>&1 | head -40; gh api 'search/code?q=TokenType+org:tacplus-dev' --jq '.items[].html_url' 2>&1 | head
+< {"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/contents#get-repository-content","status":"404"}gh: Not Found (HTTP 404)
+> Bash cd /builds/looper/opa/issues/19; gh api 'repos/tacplus-dev/kernel/git/trees/main?recursive=1' --jq '.tree[].path' | grep -i "token.*proto\|seatrials" | head; gh repo list tacplus-dev --limit 100 --json name --jq '.[].name' | tr '\n' ' '
+< cloud opa looper roadmap tacplus oauth admiral cluster people fleet-dev kernel fleet-seatrials llmproxy redo eventbus registry website chaos onscreen gateway deploymentproxy pigeon coop skipper mailbox operator doppelganger tenantecho stratum messaging blobstore launcher kmaker letsencrypt
+= thinking_tokens
+= thinking_tokens
+Finding the `TokenType` enum (auth_type's type) and the seatrials proxy policy.
+> Bash cd /tmp; gh api 'repos/tacplus-dev/tacplus/git/trees/main?recursive=1' --jq '.tree[].path' | grep -E "sys/token\.proto$" | head -3; gh api 'repos/tacplus-dev/fleet-seatrials/git/trees/main?recursive=1' --jq '.tree[].path' | grep -i -E "rego|proxy" | head -30
+< pkg/proto/sys/token.proto build/proto/services/llmproxy.proto build/proto/vservices/proxy-policy.proto deploy/bootstrap/services/llmproxy.yaml Shell cwd was reset to /builds/looper/opa/issues/19
+> Bash gh api repos/tacplus-dev/tacplus/contents/pkg/proto/sys/token.proto -H 'Accept: application/vnd.github.raw' | grep -n -A15 "enum TokenType"; gh api 'repos/tacplus-dev/fleet-seatrials/git/trees/main?recursive=1' --jq '.tree[].path' | grep -i -E "opa|polic" | head -30
+< 166:enum TokenType { 167-  // TokenTypeUndefined represents an unspecified token type 168-  TOKEN_TYPE_UNDEFINED = 0; 169-  // TokenTypeJwt represents a JWT token 170-  TOKEN_TYPE_JWT = 1; 171-  reserved 2; // was TOKEN_TYPE_SAML — SAML removed from the product (D29 amendment 2) 172-  reserved "TOKE...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash gh api repos/tacplus-dev/fleet-seatrials/contents/deploy/bootstrap/services/opa.yaml -H 'Accept: application/vnd.github.raw' > /tmp/opa19-seatrials-opa.yaml; wc -l /tmp/opa19-seatrials-opa.yaml; grep -n -i "proxypolicy\|append_aud\|extra_claims\|auth_type\|token_use\|\"url\"\|url :=\|reason" /tmp/op...
+< 5 /tmp/opa19-seatrials-opa.yaml
+> Bash cat /tmp/opa19-seatrials-opa.yaml; gh api 'repos/tacplus-dev/fleet-seatrials/git/trees/main?recursive=1' --jq '.tree[].path' | grep -i -E "\.rego|bundle|proxy" | head -30; gh api 'repos/tacplus-dev/kernel/git/trees/main?recursive=1' --jq '.tree[].path' | grep -i -E "\.rego" | head
+< # OPA service configuration. # OPA entitlements policy is loaded from services/opa/ directory. # Run 'schematic-operator init-opa' to generate default policy. # Edit these, then run: schematic-operator generate {} build/proto/services/llmproxy.proto build/proto/vservices/proxy-policy.proto deploy/bo...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; grep -rn -i "seatrials" README.md STATE.md PROPOSALS.md decisions/*.md 2>/dev/null | head; for r in operator fleet-seatrials kernel cluster fleet-dev; do echo "== $r"; gh api "repos/tacplus-dev/$r/git/trees/main?recursive=1" --jq '.tree[].path' 2>/dev/null | grep -i ...
+< == operator == fleet-seatrials == kernel == cluster == fleet-dev
+> Bash gh api 'search/code?q=proxypolicy+org:tacplus-dev' --jq '.items[] | .repository.name + " " + .path' 2>&1 | head -30; gh api 'search/code?q=append_aud+org:tacplus-dev' --jq '.items[] | .repository.name + " " + .path' 2>&1 | head -30
+< (Bash completed with no output)
+= thinking_tokens
+= thinking_tokens
+Searching for the seatrials proxy-policy bundle the issue asks me to check.
+> Bash gh api "repos/tacplus-dev/roadmap/contents/suggestions/2026-11-21-opa-s-proxy-policy-fails-closed-on-a-result-field-of-the-wrong-type-as-it-does-on-token-use-a-dropped-append-aud-or-extra-claims-is-a-token-the-policy-did-not-mean.md" -H 'Accept: application/vnd.github.raw'
+< Suggestion: opa's proxy policy fails closed on a result field of the wrong type, as it does on token_use: a dropped append_aud or extra_claims is a token the policy did not mean Type: Security Summary: EvalProxyPolicy (internal/handler.go) reads a policy result's url, reason, append_aud, extra_claim...
+= thinking_tokens
+= thinking_tokens
+> Bash for r in operator fleet-seatrials admiral cluster kmaker skipper; do echo "== $r"; gh api "repos/tacplus-dev/$r/git/trees/main?recursive=1" --jq '.tree[].path' 2>/dev/null | grep -i -E "opa" | head -15; done
+< == operator pkg/bootstrap/opa.go pkg/bootstrap/opa_test.go == fleet-seatrials build/proto/services/opa.proto deploy/bootstrap/services/opa.yaml == admiral == cluster == kmaker == skipper
+> Bash gh api repos/tacplus-dev/operator/contents/pkg/bootstrap/opa.go -H 'Accept: application/vnd.github.raw' > /tmp/opa19-operator-opa.go; wc -l /tmp/opa19-operator-opa.go; grep -n -i "proxypolicy\|append_aud\|extra_claims\|auth_type\|token_use\|url\|reason\|rego" /tmp/opa19-operator-opa.go | head -60
+< 488 /tmp/opa19-operator-opa.go 29:// ProxyPolicyDir returns the proxy OPA policy directory. 30:func ProxyPolicyDir(cfgDir string) string { 34:// BuildOPABundle reads .rego files from dir and returns a filesystem.Directory. 35:func BuildOPABundle(regoDir string) (*protoFilesystem.Directory, error) { ...
+= thinking_tokens
+= thinking_tokens
+> Bash sed -n 20,40p /tmp/opa19-operator-opa.go; gh api "repos/tacplus-dev/fleet-seatrials/git/trees/main?recursive=1" --jq '.tree[].path' | grep -E "^deploy/" | head -40
+< func OPAPolicyDir(cfgDir string) string { 	return filepath.Join(cfgDir, "services", "opa") }  // BackendTokenPolicyDir returns the backend token OPA policy directory. func BackendTokenPolicyDir(cfgDir string) string { 	return filepath.Join(cfgDir, "services", "opa-backend-token") }  // ProxyPolicyDi...
+> Bash for f in deploy/init.sh deploy/apply.sh deploy/e2e.sh deploy/build-operator.sh; do gh api "repos/tacplus-dev/fleet-seatrials/contents/$f" -H 'Accept: application/vnd.github.raw' | grep -n -i "opa\|proxy-policy\|rego" | head; done; gh api "repos/tacplus-dev/fleet-seatrials/commits?per_page=1" --jq '....
+< 389f9a62b23cc96957b0125ccc2d991cca80dad9
+= thinking_tokens
+= thinking_tokens
+Seatrials ships no proxy-policy bundle (operator seeds none, repo has no `opa-proxy-policy/`). Now checking how kernel uses `auth_type`.
+> Bash gh api "repos/tacplus-dev/kernel/git/trees/main?recursive=1" --jq '.tree[].path' > /tmp/opa19-kernel-tree.txt; grep -i "mintExternal\|IdentityServiceImpl\|proxypolicy" /tmp/opa19-kernel-tree.txt | head
+< server/src/main/java/com/github/tacplusdev/kernel/cluster/IdentityServiceImpl.java server/src/main/java/com/github/tacplusdev/kernel/cluster/PersonalIdentityServiceImpl.java server/src/test/java/com/github/tacplusdev/kernel/cluster/IdentityServiceImplTest.java server/src/test/java/com/github/tacplus...
+> Bash gh api "repos/tacplus-dev/kernel/contents/server/src/main/java/com/github/tacplusdev/kernel/cluster/IdentityServiceImpl.java" -H 'Accept: application/vnd.github.raw' | grep -n -i "authtype\|getAppendAud\|getExtraClaims\|getUrl()\|getReason" | head
+< 5084:			String reason = opaResult.getReason(); 5095:		var appendAuds = opaResult.getAppendAudList(); 5108:		String resolvedUrl = opaResult.getUrl(); 5141:		Struct extraClaims = opaResult.getExtraClaims(); 5157:		var authType = opaResult.getAuthType(); 5161:				authType, signingSelection.signingAlg()...
+> Bash gh api "repos/tacplus-dev/kernel/contents/server/src/main/java/com/github/tacplusdev/kernel/cluster/IdentityServiceImpl.java" -H 'Accept: application/vnd.github.raw' | sed -n 5150,5175p
+< 		}  		// TokenWrapper.sign auto-derives the JWT alg from the requested key family. 		ExternalSigningSelection signingSelection = 				externalSigningKeyForRequest(keyRotator, request.getRequestedSigningKeyType(), exp); 		externalToken.sign(signingSelection.signingKey());  		var authType = opaResult....
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+Kernel only relays `auth_type` to the proxy, so opa forwarding a validated `TokenType` fulfils the existing contract. Checking structpb's `json.Number` handling and existing extra_claims tests.
+> Bash cd /builds/looper/opa/issues/19; ls $(go env GOMODCACHE 2>/dev/null)/google.golang.org/ 2>&1; grep -n "extra_claims\|append_aud\|ExtraClaims\|AppendAud\|EvalProxyPolicy" internal/*_test.go | grep -v handler_proxy_token_use | head -30; grep -n -i "proxy" README.md | head
+< ls: cannot access '/builds/looper/opa/homes/looper-19/go/pkg/mod/google.golang.org/': No such file or directory internal/handler_audit_2026_09_12_test.go:122:// sibling EvalProxyPolicy already fails closed with codes.Internal on the internal/handler_audit_2026_09_12_test.go:169:				t.Errorf("status ...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; grep -n "func (e \*PolicyEvaluator) Evaluate" -A40 internal/opa.go | head -50; grep -n -i "policy\|rego\|## " README.md | head -40
+< 3:Opa is the centralized OPA (Open Policy Agent) policy evaluation service. 4:It executes typed OPA policy evaluations accessible to any service via S2S 5:gRPC. Policy definitions live in shared protos (`proto/opa/`) and are 11:## Architecture 13:Services that need policy decisions call Opa via gene...
+> Bash cd /builds/looper/opa/issues/19; sed -n 1,35p README.md; sed -n 70,200p README.md; grep -n "Evaluate\|json.Number\|UseNumber" internal/opa.go
+< # Opa  Opa is the centralized OPA (Open Policy Agent) policy evaluation service. It executes typed OPA policy evaluations accessible to any service via S2S gRPC. Policy definitions live in shared protos (`proto/opa/`) and are importable by any service. Tacplus generates typed evaluation RPCs on Opa ...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; grep -n "policy" proto/services/opa.proto; sed -n 85,110p internal/opa.go
+< 6:// OPA is the centralized OPA policy evaluation service. It executes 7:// typed OPA policy evaluations accessible to any service via S2S gRPC. 29:  // entitlements_policy is the OPA bundle for entitlement evaluation. 31:  opalib.OpaPolicy entitlements_policy = 1; 33:  // proxy_policy is the OPA bu...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+Writing the failing tests first.
+> Write /builds/looper/opa/issues/19/internal/handler_proxy_result_types_test.go
+< File created successfully at: /builds/looper/opa/issues/19/internal/handler_proxy_result_types_test.go (file state is current in your context — no need to Read it back)
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; sed -i 's/	"auth_type": "TOKEN_TYPE_JWT",$/	"auth_type": "TOKEN_TYPE_JWT"/' internal/handler_proxy_result_types_test.go; which go gofmt; gofmt -l internal/ ; gofmt -w internal/handler_proxy_result_types_test.go
+< /usr/local/go/bin/go /usr/local/go/bin/gofmt internal/handler_proxy_result_types_test.go
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+Now the handler change.
+> Bash cd /builds/looper/opa/issues/19; cat > /tmp/opa19-new.go <<'EOF' 	resp := &proxypolicy_pb.ProxyPolicyEvalResult{}  	// Every field is optional, but a present field of the wrong type fails the 	// call (codes.Internal, naming the field and its type), as an unrecognised 	// token_use does (#13). Skipp...
+< 608 679  internal/handler.go | 58 ++++++++++++++++++++++++++++++++++++++++-------------  1 file changed, 44 insertions(+), 14 deletions(-)
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; grep -rn "tokenUseFrom\|parseTokenUse" --include=*.go . | grep -v "^./internal/handler.go"
+< ./internal/handler_proxy_token_use_test.go:31:// OPA hands numbers back as json.Number, which parseTokenUse ignored (#13): a ./internal/handler_proxy_token_use_test.go:128:		// The generated ParseTokenUse maps "" to the zero value; parseTokenUse must not. ./internal/handler_proxy_token_use_test.go:1...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; grep -n "^// parseTokenUse converts" internal/handler.go; grep -n "^// getEvaluator" internal/handler.go
+< 737:// parseTokenUse converts an OPA-returned token_use value (string name or number) to the 801:// getEvaluator returns the PolicyEvaluator for the given entry_point.
+> Bash cd /builds/looper/opa/issues/19; cat > /tmp/opa19-enum.go <<'EOF' // parseTokenUse converts an OPA-returned token_use value (string name or number) to the // token.TokenUse enum. OPA policies may return the string name ("TOKEN_USE_EXTERNAL"), // its short form ("EXTERNAL") or the integer value (6). ...
+< go: downloading github.com/open-policy-agent/opa v1.15.1 go: downloading go.uber.org/zap v1.27.1 go: downloading google.golang.org/grpc v1.84.0 go: downloading google.golang.org/protobuf v1.36.11 go: downloading github.com/cespare/xxhash/v2 v2.3.0
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; grep -n "json.Number" $(go env GOMODCACHE)/google.golang.org/protobuf@v1.36.11/types/known/structpb/struct.pb.go | head -3; go vet ./internal 2>&1 | tail -3; git diff internal/handler.go | head -150 | tail -80
+< 305://	║ json.Number                           │ stored as NumberValue                      ║ 344:	case json.Number: 	go get github.com/tacplus-dev/opa/tacplus/types/vservices/proxypolicy internal/handler.go:28:2: no required module provides package github.com/tacplus-dev/opa/tacplus/types/vservices...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; python3 - <<'EOF' p='internal/handler.go' s=open(p).read() s=s.replace("""		if tu, err := token_pb.ParseTokenUse(v); err == nil { 			return tu, nil 		} 	} 	n, err := parseEnum(""","""		if tu, err := token_pb.ParseTokenUse(v); err == nil { 			return tu, nil 		} 		// A...
+< (Bash completed with no output)
+= thinking_tokens
+= thinking_tokens
+Handler done; updating the doc comment, then README.
+> Bash cd /builds/looper/opa/issues/19; sed -n 265,302p internal/handler_test.go
+< 	for i := range got { 		if got[i] != want[i] { 			return false 		} 	} 	return true }  func TestParseTokenUseRefusesNumbersOutsideTheEnum(t *testing.T) { 	for _, tc := range []struct { 		raw  any 		want token_pb.TokenUse 	}{ 		{float64(6), token_pb.TokenUse_TOKEN_USE_EXTERNAL}, 		{int64(6), token_pb....
+Fine. Now the doc comment and README.
+> Bash cd /builds/looper/opa/issues/19; python3 - <<'EOF' p='internal/handler.go' s=open(p).read() old="""// The policy receives {claims, metadata} and returns: //   - allow: bool — whether the request is permitted //   - url: string — resolved destination URL (empty = use service default) //   - reason: s...
+<  README.md           |   9 ++++  internal/handler.go | 144 ++++++++++++++++++++++++++++++++++++----------------  2 files changed, 108 insertions(+), 45 deletions(-)
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; grep -rn "proxypolicy" internal/*_test.go | grep -v "_pb\|proxypolicy_fe" | head; grep -rn '"allow"' internal/*_test.go | head
+< internal/handler_audit_2026_09_12_test.go:242:	// entry point. It compiles, so it used to be stored under "data.proxypolicy.eval" internal/handler_proxy_result_types_test.go:49:			h := loadProxyPolicy(t, "package proxypolicy\n\neval := {\"allow\": true, \""+tc.field+"\": "+tc.value+"}\n") internal/h...
+= thinking_tokens
+= thinking_tokens
+Duplicate `allow` key in the allow test cases — fixing the template.
+> Bash cd /builds/looper/opa/issues/19; python3 - <<'EOF' p='internal/handler_proxy_result_types_test.go' s=open(p).read() old='''			h := loadProxyPolicy(t, "package proxypolicy\\n\\neval := {\\"allow\\": true, \\""+tc.field+"\\": "+tc.value+"}\\n") 			resp, err := h.EvalProxyPolicy(context.Background(), n...
+< 		{"auth_type", `true`}, 		{"auth_type", `null`}, 	} { 		t.Run(tc.field+"="+tc.value, func(t *testing.T) { 			members := `"allow": true, "` + tc.field + `": ` + tc.value 			if tc.field == "allow" { 				members = `"allow": ` + tc.value 			} 			h := loadProxyPolicy(t, "package proxypolicy\n\neval := {...
+= thinking_tokens
+= thinking_tokens
+Now PROPOSALS (move the entry to promoted) and the trace check.
+> Bash cd /builds/looper/opa/issues/19; python3 - <<'EOF' p='PROPOSALS.md' lines=open(p).read().split('\n') i=[n for n,l in enumerate(lines) if l.startswith("- **A proxy-policy result's other fields fail closed too**")][0] entry=lines.pop(i) entry=entry.replace("(2026-11-12, #13)","(2026-11-12, #13; promot...
+< diff --git a/PROPOSALS.md b/PROPOSALS.md index 9603c59..73f4885 100644 --- a/PROPOSALS.md +++ b/PROPOSALS.md @@ -22,10 +22,11 @@ the looper then marks it `promoted` or `declined` here with the date.    Update 2026-11-15 (nightly scan, later run): the gates were verified on main (5398d84) another way...
+= thinking_tokens
+= thinking_tokens
+Committing and starting the build job.
+> Bash cd /builds/looper/opa/issues/19; git add -A internal README.md PROPOSALS.md && git status --short && git commit -q -F - <<'EOF' EvalProxyPolicy: a result field of the wrong type fails closed (#19)  A proxy-policy result field of the wrong type (a string for append_aud, a list for extra_claims, a num...
+< M  PROPOSALS.md M  README.md M  internal/handler.go A  internal/handler_proxy_result_types_test.go 5072d98 EvalProxyPolicy: a result field of the wrong type fails closed (#19) 1452
+While the build runs, checking whether STATE.md describes this behaviour.
+> Bash cd /builds/looper/opa/issues/19; grep -n -i "proxy\|token_use\|fail" STATE.md | head -20; wc -l STATE.md
+< 7:- **Released / deployed:** v0.3.1 (2026-11-17, #17, #18: `ghcr.io/tacplus-dev/opa:0.3.1` and `:0.3`, linux/arm64, Latest, published by its tag push: run 44082428442; the index `sha256:2903ba0a…`). v0.3.0 (2026-11-16, #2: release CI; `ghcr.io/tacplus-dev/opa:0.3.0` and `:0.3`, linux/arm64, Latest, ...
+> Bash sleep 240; tail -5 /tmp/opa19-build.log
+< <tool_use_error>Blocked: sleep 240 followed by: tail -5 /tmp/opa19-build.log. To wait for a condition, use Monitor with an until-loop (e.g. `until <check>; do sleep 2; done`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.</tool...
+> Bash timeout 590 bash -c 'while kill -0 1452 2>/dev/null; do sleep 10; done'; tail -15 /tmp/opa19-build.log
+= task_started
+= task_notification
+< [2026-11-21T16:40:50Z] checkpoint of #19 (a build) pushed to looper/opa-19:  6 files changed, 568 insertions(+), 46 deletions(-) [2026-11-21T16:40:50Z] build requested: opa 5072d98, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3097826925 of opa 5072d9...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/19; git status --short; timeout 590 bash -c 'while kill -0 1452 2>/dev/null; do sleep 10; done'; tail -15 /tmp/opa19-build.log
+= task_started
+= task_notification
+< [2026-11-21T16:40:50Z] checkpoint of #19 (a build) pushed to looper/opa-19:  6 files changed, 568 insertions(+), 46 deletions(-) [2026-11-21T16:40:50Z] build requested: opa 5072d98, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3097826925 of opa 5072d9...
+No runner took it in 15 min (exit 4); a second `--build` of the same commit picks the queued job up.
+> Bash cd /builds/looper/opa/issues/19; nohup /usr/local/bin/repo-looper --repo opa --issue 19 --build > /tmp/opa19-build2.log 2>&1 & echo $! > /tmp/opa19-pid; timeout 590 bash -c 'while kill -0 $(cat /tmp/opa19-pid) 2>/dev/null; do sleep 10; done'; tail -8 /tmp/opa19-build2.log
