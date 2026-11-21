@@ -568,14 +568,17 @@ func dedupeStrings(in []string) []string {
 // proxy policy for the given caller claims and routing metadata.
 //
 // The policy receives {claims, metadata} and returns:
-//   - allow: bool — whether the request is permitted
+//   - allow: bool — whether the request is permitted (missing = deny)
 //   - url: string — resolved destination URL (empty = use service default)
 //   - reason: string — denial reason (when allow = false)
-//   - append_aud: array[string] — audiences to append to the minted token (never replaces original)
+//   - append_aud: array[string] or string — audiences to append to the minted token (never replaces original)
 //   - extra_claims: object — additional JWT claims to inject
-//   - auth_type: string — credential format ("jwt" or "saml")
-//   - token_use: string or int — token_use claim; must be "TOKEN_USE_EXTERNAL"/6 or unset;
-//     a value that is not a TokenUse name or value fails the call (codes.Internal)
+//   - auth_type: string or int — a TokenType name or value ("TOKEN_TYPE_JWT"/"JWT"/1)
+//   - token_use: string or int — token_use claim; must be "TOKEN_USE_EXTERNAL"/6 or unset
+//
+// Every field may be left out; a present field of another type, or an auth_type
+// or token_use that is not a name or value of its enum, fails the call
+// (codes.Internal) rather than being dropped from the token (#13, #19).
 func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Caller, req *proxypolicy_pb.ProxyPolicyEvalInput) (*proxypolicy_pb.ProxyPolicyEvalResult, error) {
 	eval, err := h.getEvaluator(ProxyPolicyEntryPoint)
 	if err != nil {
@@ -607,32 +610,44 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 
 	resp := &proxypolicy_pb.ProxyPolicyEvalResult{}
 
+	// Every field is optional, but a present field of the wrong type fails the
+	// call (codes.Internal, naming the field and its type), as an unrecognised
+	// token_use does (#13). Skipping it, which this did until #19, minted a token
+	// without the audience, claims or credential format the policy wrote.
 	if allowRaw, ok := obj["allow"]; !ok {
 		zap.L().Warn("EvalProxyPolicy: policy result missing 'allow' field, defaulting to deny")
 	} else if allow, ok := allowRaw.(bool); ok {
 		resp.Allow = allow
 	} else {
-		zap.L().Warn("EvalProxyPolicy: 'allow' field is not a bool, defaulting to deny",
-			zap.Any("allow_value", allowRaw))
+		return nil, wrongTypedField("allow", "a bool", allowRaw)
 	}
 
 	if reasonRaw, ok := obj["reason"]; ok {
-		if reason, ok := reasonRaw.(string); ok {
-			resp.Reason = reason
+		reason, ok := reasonRaw.(string)
+		if !ok {
+			return nil, wrongTypedField("reason", "a string", reasonRaw)
 		}
+		resp.Reason = reason
 	}
 
 	if urlRaw, ok := obj["url"]; ok {
-		if u, ok := urlRaw.(string); ok {
-			resp.Url = u
+		u, ok := urlRaw.(string)
+		if !ok {
+			return nil, wrongTypedField("url", "a string", urlRaw)
 		}
+		resp.Url = u
 	}
 
 	if appendAudRaw, ok := obj["append_aud"]; ok {
 		switch v := appendAudRaw.(type) {
 		case []interface{}:
 			for _, item := range v {
-				if s, ok := item.(string); ok && s != "" {
+				s, ok := item.(string)
+				if !ok {
+					return nil, status.Errorf(codes.Internal, "proxy policy: append_aud entries must be strings, got %v (%T)", item, item)
+				}
+				// An empty audience adds nothing to the token.
+				if s != "" {
 					resp.AppendAud = append(resp.AppendAud, s)
 				}
 			}
@@ -641,6 +656,8 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 			if v != "" {
 				resp.AppendAud = append(resp.AppendAud, v)
 			}
+		default:
+			return nil, wrongTypedField("append_aud", "a string or a list of strings", appendAudRaw)
 		}
 	}
 
@@ -652,28 +669,44 @@ func (h *Handler) EvalProxyPolicy(ctx context.Context, caller *servicemanager.Ca
 		resp.TokenUse = tokenUse
 	}
 
+	if authTypeRaw, ok := obj["auth_type"]; ok {
+		authType, err := parseTokenType(authTypeRaw)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "proxy policy: %v", err)
+		}
+		resp.AuthType = authType
+	}
+
 	// extra_claims: additional JWT claims the kernel stamps into the minted
 	// external token (e.g. anthropic federation_rule_id). The rego returns a
 	// plain object; convert it to a protobuf Struct. Without this mapping the
 	// claims are silently dropped before reaching the kernel.
 	if extraRaw, ok := obj["extra_claims"]; ok {
-		if m, ok := extraRaw.(map[string]interface{}); ok {
-			if s, err := structpb.NewStruct(m); err == nil {
-				resp.ExtraClaims = s
-			} else {
-				zap.L().Warn("EvalProxyPolicy: failed to convert extra_claims to struct",
-					zap.Error(err))
-			}
+		m, ok := extraRaw.(map[string]interface{})
+		if !ok {
+			return nil, wrongTypedField("extra_claims", "an object", extraRaw)
 		}
+		s, err := structpb.NewStruct(m)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "proxy policy: extra_claims: %v", err)
+		}
+		resp.ExtraClaims = s
 	}
 
 	zap.L().Info("EvalProxyPolicy result",
 		zap.Bool("allow", resp.Allow),
 		zap.String("url", resp.Url),
 		zap.String("reason", resp.Reason),
+		zap.String("auth_type", resp.AuthType.String()),
 		zap.Bool("extra_claims", resp.ExtraClaims != nil))
 
 	return resp, nil
+}
+
+// wrongTypedField is the error for a proxy-policy result field of the wrong
+// type: it fails the call rather than dropping the field (#19).
+func wrongTypedField(field, want string, raw interface{}) error {
+	return status.Errorf(codes.Internal, "proxy policy: %s must be %s, got %v (%T)", field, want, raw, raw)
 }
 
 // loadPolicy creates or replaces the PolicyEvaluator for wantEntryPoint.
@@ -711,17 +744,9 @@ func (h *Handler) loadPolicy(policy *opaPb.OpaPolicy, wantEntryPoint string) err
 // and a defined TokenUse, never truncated (#12). Anything else, the empty string
 // included, is an error, not a silent TOKEN_USE_UNSPECIFIED.
 func parseTokenUse(raw interface{}) (token_pb.TokenUse, error) {
-	switch v := raw.(type) {
-	case string:
-		// The proto names, TOKEN_USE_UNSPECIFIED included (as its number 0 is below).
-		if n, ok := token_pb.TokenUse_value[v]; ok {
-			return token_pb.TokenUse(n), nil
-		}
+	if v, ok := raw.(string); ok && v != "" {
 		// The generated ParseTokenUse maps "" to the zero value with no error: an
 		// empty name is not a TokenUse here, only a missing token_use is unspecified.
-		if v == "" {
-			break
-		}
 		if tu, err := token_pb.ParseTokenUse(v); err == nil {
 			return tu, nil
 		}
@@ -729,43 +754,72 @@ func parseTokenUse(raw interface{}) (token_pb.TokenUse, error) {
 		if tu, err := token_pb.ParseTokenUse("TOKEN_USE_" + v); err == nil {
 			return tu, nil
 		}
+	}
+	n, err := parseEnum("token_use", "TokenUse", "TOKEN_USE_", token_pb.TokenUse_value, token_pb.TokenUse_name, raw)
+	return token_pb.TokenUse(n), err
+}
+
+// parseTokenType converts an OPA-returned auth_type value to the token.TokenType
+// enum, in the forms parseTokenUse takes: the name ("TOKEN_TYPE_JWT"), its short
+// form ("JWT") or the integer value (1). Anything else is an error (#19), not a
+// silent TOKEN_TYPE_UNDEFINED: "TOKEN_TYPE_SAML" (2) included, which the enum
+// reserves since SAML left the product.
+func parseTokenType(raw interface{}) (token_pb.TokenType, error) {
+	n, err := parseEnum("auth_type", "TokenType", "TOKEN_TYPE_", token_pb.TokenType_value, token_pb.TokenType_name, raw)
+	return token_pb.TokenType(n), err
+}
+
+// parseEnum converts an OPA-returned value of the enum named enum, whose names
+// carry prefix, to its number: a name (the zero value's included), a name without
+// prefix, or an integer in int32 range that is a defined value, never truncated.
+// field names the result field in the error.
+func parseEnum(field, enum, prefix string, values map[string]int32, names map[int32]string, raw interface{}) (int32, error) {
+	switch v := raw.(type) {
+	case string:
+		if n, ok := values[v]; ok {
+			return n, nil
+		}
+		// Also accept short form without prefix; "" is not a name.
+		if n, ok := values[prefix+v]; ok && v != "" {
+			return n, nil
+		}
 	case json.Number:
 		if n, err := v.Int64(); err == nil {
-			return tokenUseFromInt(n)
+			return enumFromInt(field, enum, names, n)
 		}
 		if f, err := v.Float64(); err == nil {
-			return tokenUseFromFloat(f)
+			return enumFromFloat(field, enum, names, f)
 		}
 	case float64:
-		return tokenUseFromFloat(v)
+		return enumFromFloat(field, enum, names, v)
 	case int64:
-		return tokenUseFromInt(v)
+		return enumFromInt(field, enum, names, v)
 	case int:
-		return tokenUseFromInt(int64(v))
+		return enumFromInt(field, enum, names, int64(v))
 	}
-	return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED, fmt.Errorf("token_use %v (%T) is not a TokenUse name or value", raw, raw)
+	return 0, fmt.Errorf("%s %v (%T) is not a %s name or value", field, raw, raw, enum)
 }
 
-// tokenUseFromFloat returns the TokenUse numbered f, or an error when f is not an
-// integer or no TokenUse has that number.
-func tokenUseFromFloat(f float64) (token_pb.TokenUse, error) {
+// enumFromFloat returns the enum value numbered f, or an error when f is not an
+// integer or no value has that number.
+func enumFromFloat(field, enum string, names map[int32]string, f float64) (int32, error) {
 	if f != math.Trunc(f) || f < math.MinInt32 || f > math.MaxInt32 {
-		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED, fmt.Errorf("token_use %v is not a TokenUse value", f)
+		return 0, fmt.Errorf("%s %v is not a %s value", field, f, enum)
 	}
-	return tokenUseFromInt(int64(f))
+	return enumFromInt(field, enum, names, int64(f))
 }
 
-// tokenUseFromInt returns the TokenUse numbered n, or an error when no TokenUse has
+// enumFromInt returns the enum value numbered n, or an error when no value has
 // that number: a number outside int32 is refused, never truncated onto one (#12).
-func tokenUseFromInt(n int64) (token_pb.TokenUse, error) {
+func enumFromInt(field, enum string, names map[int32]string, n int64) (int32, error) {
 	if n < math.MinInt32 || n > math.MaxInt32 {
-		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED, fmt.Errorf("token_use %d is not a TokenUse value", n)
+		return 0, fmt.Errorf("%s %d is not a %s value", field, n, enum)
 	}
 	v := int32(n)
-	if _, ok := token_pb.TokenUse_name[v]; !ok {
-		return token_pb.TokenUse_TOKEN_USE_UNSPECIFIED, fmt.Errorf("token_use %d is not a TokenUse value", n)
+	if _, ok := names[v]; !ok {
+		return 0, fmt.Errorf("%s %d is not a %s value", field, n, enum)
 	}
-	return token_pb.TokenUse(v), nil
+	return v, nil
 }
 
 // getEvaluator returns the PolicyEvaluator for the given entry_point.

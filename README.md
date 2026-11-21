@@ -20,6 +20,15 @@ other services' policy evaluations are mediated through kernel.
 | Field | Description |
 |-------|-------------|
 | `entitlements_policy` | OPA bundle for entitlement evaluation |
+| `proxy_policy` | OPA bundle for proxy request evaluation (`data.proxypolicy.eval`) |
+
+The proxy policy's result is an object whose fields are all optional:
+`allow` (bool; missing denies), `url` and `reason` (strings), `append_aud`
+(a string or a list of strings), `extra_claims` (an object), and `auth_type`
+and `token_use` (a `TokenType`/`TokenUse` name, its short form or its number).
+A present field of another type, or an enum name or number that is not
+defined, fails `EvalProxyPolicy` with `INTERNAL` naming the field: kernel mints
+no token rather than one without what the policy wrote.
 
 ## Build
 
