@@ -1,0 +1,118 @@
+= init
+> Bash git status --short && git diff && cat ci/pinned-bases.sh ci/pinned-bases_test.sh && git log --oneline -3 origin/looper/opa-21 2>/dev/null; git fetch -q origin && git log --oneline -5 origin/looper/opa-21
+<  M Dockerfile  M STATE.md  M justfile ?? ci/pinned-bases.sh ?? ci/pinned-bases_test.sh diff --git a/Dockerfile b/Dockerfile index d791667..fbaa420 100644 --- a/Dockerfile +++ b/Dockerfile @@ -2,8 +2,11 @@  # Layers the opa binary onto a minimal Alpine base.    # The base is a build argument: a fleet...
+= thinking_tokens
+= thinking_tokens
+> Bash ls -l ci/ && ci/pinned-bases_test.sh; echo rc=$?; git ls-tree origin/looper/opa-21 ci/; git show --stat ffbb5b2 | head -20; awk --version 2>&1 | head -1
+< total 48 -rwxr-xr-x 1 looper-21 looper-21 1617 Nov 24 19:47 build-image.sh -rwxr-xr-x 1 looper-21 looper-21 1416 Nov 24 19:47 checkout.sh drwxr-xr-x 2 looper-21 looper-21 4096 Nov 24 19:47 locks -rwxr-xr-x 1 looper-21 looper-21 1966 Nov 24 19:47 pinned-bases.sh -rwxr-xr-x 1 looper-21 looper-21 2814 ...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash git show ffbb5b2:.looper/claude.log | tail -40
+< = thinking_tokens = thinking_tokens > Bash cd /builds/looper/opa/issues/21; git ls-files -s ci/; nohup /usr/local/bin/repo-looper --repo opa --issue 21 --build > /tmp/build21.log 2>&1 & echo $! < 100755 36de20cce4155cb50560036d1aec6e9089ab1244 0	ci/build-image.sh 100755 907bba10cd3545c929f04ef83201d...
+= thinking_tokens
+= thinking_tokens
+> Bash which glab curl; curl -s "https://gitlab.com/api/v4/projects/tacplus-dev%2Fbuild/pipelines/3110241654/jobs" | head -c 1500
+< /usr/local/bin/glab /usr/bin/curl {"message":"404 Project Not Found"}
+> Bash glab api "projects/tacplus-dev%2Fbuild/pipelines/3110241654/jobs" 2>&1 | head -c 1500
+< {"message":"404 Project Not Found"}glab: 404 Project Not Found (HTTP 404)
+= thinking_tokens
+= thinking_tokens
+I can't see why the manager's build failed (I don't have access to the pipeline), and the tests pass here. Next I'll commit the work and run my own build to find out.
+> Bash git log --oneline -2 HEAD && git add Dockerfile justfile ci/pinned-bases.sh ci/pinned-bases_test.sh && git commit -q -F - <<'EOF' Dockerfile: pin the release base by digest, and gate every FROM on it (#21)  A floating tag (alpine:3.24) lets a rebuild of the same commit ship a different, unscanned ba...
+< 2e09403 Relock: the pinned images to their lines' newest patches and their tags' digests (#20) c62ff8a HISTORY.md: #19 (looper) d8397c5 STATE.md: the release image's base is pinned by digest (#21) 88db21d Dockerfile: pin the release base by digest, and gate every FROM on it (#21) 2e09403 Relock: the...
+> Bash for i in $(seq 1 110); do kill -0 903 2>/dev/null || break; sleep 5; done; cat /tmp/build21.log | tail -30
+= task_started
+= task_notification
+< [2026-11-24T19:47:57Z] checkpoint of #21 (a build) pushed to looper/opa-21:  7 files changed, 327 insertions(+), 4 deletions(-) [2026-11-24T19:47:57Z] build requested: opa d8397c5, the gates full (no gates.yaml) [2026-11-24T19:48:01Z] FATAL the looper did not start the build: GitLab refused to start...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/looper/opa/issues/21; for i in $(seq 1 9); do /usr/local/bin/repo-looper --repo opa --issue 21 --build > /tmp/build21.log 2>&1; rc=$?; grep -q "exceeded the allowed number" /tmp/build21.log || break; sleep 50; done; echo rc=$rc; tail -8 /tmp/build21.log
+= task_started
+= task_notification
+< rc=1 [2026-11-24T19:50:57Z] build requested: opa d8397c5, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3110411472 of opa d8397c5, the gates full on base 2e09403 verdict: failure: the build failed build times: https://gitlab.com/tacplus-dev/build/-/pip...
+A build ran this time and failed after 16 seconds, so this is a real failure, not GitLab's job limit. Reading the log for the cause.
+> Bash cat /tmp/build21.log; /usr/local/bin/repo-looper --help 2>&1 | head -40
+< [2026-11-24T19:50:57Z] build requested: opa d8397c5, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3110411472 of opa d8397c5, the gates full on base 2e09403 verdict: failure: the build failed build times: https://gitlab.com/tacplus-dev/build/-/pipeline...
+= thinking_tokens
+= thinking_tokens
+No log comes back with the verdict. Sixteen seconds is too short for the gates to have run, so I suspect an image pull failed early. I'm checking that the pinned alpine digest really exists.
+> Bash tok=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/alpine:pull" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["token"])'); for ref in 3.24 3.24.4 sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf; do echo "$ref: $(curl ...
+< 3.24: HTTP/2 200  docker-content-digest: sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf  3.24.4: HTTP/2 200  docker-content-digest: sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf  sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71b...
+= thinking_tokens
+= thinking_tokens
+The digest is correct: `alpine:3.24` and `3.24.4` both resolve to the pinned one. Next I'm reading the repo's build scripts to see what can fail that early.
+> Bash cat justfile ci/build-image.sh; ls; cat tacplus.lock; grep -n -i -A15 "security checks" README.md | head -40
+< # `generate` is for local development. `gates` is what the nightly scan and every # land onto main run (just gates).  TACPLUS := env_var_or_default("TACPLUS_BIN", "tacplus")  default: generate  generate:   #!/usr/bin/env bash   set -euo pipefail   {{TACPLUS}} build --tag latest  # What every change ...
+= thinking_tokens
+= thinking_tokens
+The lock pins build image `build:2.6.13` (from the #20 relock). Checking that its digest still exists on ghcr.
+> Bash tok=$(curl -s "https://ghcr.io/token?scope=repository:tacplus-dev/tacplus/build:pull" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["token"])'); for ref in 2.6.13 sha256:0387c7dc05216bb2158d2b907f10840b67079026872d01c54362a90ecca9ba4a; do echo "$ref: $(curl -sI -H "Authorization: Beare...
+< 2.6.13: HTTP/2 200  docker-content-digest: sha256:0387c7dc05216bb2158d2b907f10840b67079026872d01c54362a90ecca9ba4a  sha256:0387c7dc05216bb2158d2b907f10840b67079026872d01c54362a90ecca9ba4a: HTTP/2 200  docker-content-digest: sha256:0387c7dc05216bb2158d2b907f10840b67079026872d01c54362a90ecca9ba4a
+= thinking_tokens
+= thinking_tokens
+That digest is fine too. Checking whether I have any access to the GitLab job logs.
+> Bash glab auth status 2>&1 | head; env | grep -iE 'gitlab|glab|ci_' | sed 's/=.*/=…/'; ls /builds/tacplus-dev/looper/looper-runs/20261124T194716Z-issue-21/
+< gitlab.com   x gitlab.com: API call failed: GET https://gitlab.com/api/v4/user: 401 {message: 401 Unauthorized}   ✓ Git operations for gitlab.com configured to use ssh protocol.   ✓ API calls for gitlab.com are made over https protocol.   ✓ REST API Endpoint: https://gitlab.com/api/v4/   ✓ GraphQL E...
+> Bash cd /builds/tacplus-dev/looper/looper-runs/20261124T194716Z-issue-21/ && cat builds.log | tail -20; ls -R builds | head -30
+< [2026-11-24T19:47:59Z] GitLab refused the build of d8397c5 with the input report (curl: (22) The requested URL returned error: 422 {"message":{"base":["Project exceeded the allowed number of jobs in active pipelines. Retry later."]}} ): its CI file may not declare it yet (looper#195); started again ...
+= thinking_tokens
+= thinking_tokens
+> Bash cd /builds/tacplus-dev/looper/looper-runs/20261124T194716Z-issue-21/builds && head -50 20261124T195057Z-84047778.*; head -c 3000 ../security/summary.md
+< ==> 20261124T195057Z-84047778.cancelled <== failed  ==> 20261124T195057Z-84047778.started <== 3110411472 https://gitlab.com/tacplus-dev/build/-/pipelines/3110411472  ==> 20261124T195057Z-84047778.taken <== sha=d8397c5427bc553d1c3a3c8fb2112d8e173029dd gates= base=2e09403e72d0bc1ed4b32488d244d9b653bb8...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash gh api "repos/tacplus-dev/build/commits?per_page=8" --jq '.[] | .sha[0:8]+" "+.commit.committer.date+" "+(.commit.message|split("\n")[0])' 2>&1; gh issue list --repo tacplus-dev/build --state all --limit 8 2>&1 | head; gh issue list --repo tacplus-dev/looper --limit 10 --search "build failed" 2>&1|h...
+< {"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#list-commits","status":"404"}gh: Not Found (HTTP 404) GraphQL: Could not resolve to a Repository with the name 'tacplus-dev/build'. (repository) 199	OPEN	The looper image is not published: the image workflow fai...
+= thinking_tokens
+= thinking_tokens
+tacplus-dev/looper#43 is still open: "A fresh runner VM's first job fails". A failure 16 to 23 seconds in matches that. I'll retry the build once more.
+> Bash cd /builds/looper/opa/issues/21; for i in $(seq 1 9); do /usr/local/bin/repo-looper --repo opa --issue 21 --build > /tmp/build21.log 2>&1; rc=$?; grep -q "exceeded the allowed number" /tmp/build21.log || break; sleep 50; done; echo rc=$rc; tail -4 /tmp/build21.log
+= task_started
+= task_notification
+< rc=1 [2026-11-24T19:53:25Z] build requested: opa d8397c5, the gates full (no gates.yaml) the build job https://gitlab.com/tacplus-dev/build/-/pipelines/3110419596 of opa d8397c5, the gates full on base 2e09403 verdict: failure: the build failed build times: https://gitlab.com/tacplus-dev/build/-/pip...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+Three builds have now failed the same way, quickly. To tell whether my change or the pipeline is at fault, I'll build an empty commit on main's tree, then restore my branch.
+> Bash cd /builds/looper/opa/issues/21; git branch -f wip21 HEAD && git reset -q --hard origin/main && git commit -q --allow-empty -m "diag: main's tree, to see whether the build fails without #21's change" && for i in $(seq 1 9); do /usr/local/bin/repo-looper --repo opa --issue 21 --build > /tmp/build21.l...
+= task_started
+= task_notification
+< rc=2 [2026-11-24T20:01:26Z] build requested: opa 01f8479, the gates full (no gates.yaml) [2026-11-24T20:01:30Z] FATAL the looper did not start the build: GitLab refused to start the build: curl: (22) The requested URL returned error: 422 {"message":{"base":["Project exceeded the allowed number of jo...
+= thinking_tokens
+= thinking_tokens
+GitLab refused all nine attempts because too many jobs were active. Retrying the diagnostic build in the background with longer waits.
+> Bash cd /builds/looper/opa/issues/21; cat > /tmp/diag21.sh <<'EOF' cd /builds/looper/opa/issues/21 git reset -q --hard origin/main && git commit -q --allow-empty -m "diag: main's tree, to see whether the build fails without #21's change" for i in $(seq 1 30); do /usr/local/bin/repo-looper --repo opa --is...
+< 5206
