@@ -26,3 +26,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-21 looper issue A proxy-policy result field of the wrong type fails closed, as token_use does: a dropped append_aud or extra_claims is a token the policy did not mean (#19)
 - 2026-11-26 looper issue Pinned images behind their lines: relock (tacplus.lock: tacplus 2.6.8 → 2.6.13, and 1 more) (#20)
 - 2026-11-27 looper issue Pinned images behind their lines: relock (tacplus.lock: tacplus 2.6.13 → 2.6.14, and 2 more) (#22)
+- 2026-11-28 looper issue Pinned images behind their lines: relock (tacplus.lock: tacplus 2.6.14 → 2.6.16, and 1 more) (#24)
